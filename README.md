@@ -11,7 +11,7 @@
   <a href="https://github.com/Origin-Client/Origin/stargazers"><img src="https://img.shields.io/github/stars/Origin-Client/Origin?color=yellow&logo=github&style=for-the-badge" alt="Stars"></a>
   <a href="https://github.com/Origin-Client/Origin/issues"><img src="https://img.shields.io/github/issues/Origin-Client/Origin?style=for-the-badge&logo=github" alt="Issues"></a>
   <a href="https://github.com/Origin-Client/Origin/commits/main"><img src="https://img.shields.io/github/commit-activity/m/Origin-Client/Origin?style=for-the-badge&logo=git" alt="Commits"></a>
-  <a href="https://dsc.gg/origin-client"><img src="https://img.shields.io/discord/123456789012345678?label=Join%20Discord&style=for-the-badge&logo=discord&color=5865F2&logoColor=white" alt="Discord"></a>
+  <a href="https://discord.gg/nTdsvbH62v"><img src="https://img.shields.io/discord/123456789012345678?label=Join%20Discord&style=for-the-badge&logo=discord&color=5865F2&logoColor=white" alt="Discord"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0.html"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge&logo=gnu" alt="License: GPL v3"></a>
 </p>
 
