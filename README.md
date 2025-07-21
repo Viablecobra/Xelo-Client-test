@@ -1,1 +1,1 @@
-an open source minecraft bedrock client for mobile
+an open source minecraft bedrock client for Android
