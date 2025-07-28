@@ -198,6 +198,7 @@
             app:strokeColor="@color/outline">
 
             <LinearLayout
+                android:id="@+id/modulesCardContent"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -217,7 +218,39 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="@android:color/transparent"
-                    android:padding="8dp" />
+                    android:padding="8dp"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Config Management Buttons -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/exportConfigButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="8dp"
+                        android:text="Export Config"
+                        android:icon="@android:drawable/ic_menu_upload"
+                        android:backgroundTint="@color/primary"
+                        android:textColor="@color/onPrimary" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/importConfigButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:text="Import Config"
+                        android:icon="@android:drawable/ic_menu_save"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:textColor="@color/primary" />
+
+                </LinearLayout>
 
             </LinearLayout>
 
@@ -328,7 +361,7 @@
                             android:layout_height="48dp"
                             android:layout_weight="1"
                             android:layout_marginStart="2dp"
-                            android:layout_marginEnd="4dp"
+                            android:layout_marginEnd="2dp"
                             android:text="REDO"
                             android:textSize="11sp"
                             android:textStyle="bold"
