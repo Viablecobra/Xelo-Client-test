@@ -43,6 +43,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
@@ -54,6 +55,8 @@ public class DashboardFragment extends Fragment {
     private File currentRootDir = null; // Store the found root directory
     private static final int IMPORT_REQUEST_CODE = 1002;
     private static final int EXPORT_REQUEST_CODE = 1003;
+    private static final int IMPORT_CONFIG_REQUEST_CODE = 1004;
+    private static final int EXPORT_CONFIG_REQUEST_CODE = 1005;
     
     // Options.txt editor variables
     private File optionsFile;
@@ -200,8 +203,11 @@ public class DashboardFragment extends Fragment {
             
             // Initialize module items
             moduleItems = new ArrayList<>();
-moduleItems.add(new ModuleItem("no hurt cam", "allows you to toggle the in-game hurt cam", "Nohurtcam"));
-moduleItems.add(new ModuleItem("No Fog", "disables the in-game fog", "no_fog"));
+            moduleItems.add(new ModuleItem("no hurt cam", "allows you to toggle the in-game hurt cam", "Nohurtcam"));
+            moduleItems.add(new ModuleItem("No Fog", "allows you to toggle the in-game fog", "Nofog"));
+            moduleItems.add(new ModuleItem("Particles Disabler", "allows you to toggle the in-game particles", "particles_disabler"));
+            moduleItems.add(new ModuleItem("Java Fancy Clouds", "Changes the clouds to Java Fancy Clouds", "java_clouds"));
+            moduleItems.add(new ModuleItem("Java Cubemap", "improves the in-game cubemap bringing it abit lower", "java_cubemap"));
             
             // Create and set adapter
             moduleAdapter = new ModuleAdapter(moduleItems, this::onModuleToggle);
@@ -209,6 +215,127 @@ moduleItems.add(new ModuleItem("No Fog", "disables the in-game fog", "no_fog"));
             
             // Load current config state
             loadModuleStates();
+        }
+        
+        // Set up the existing XML config buttons
+        setupConfigButtons(view);
+    }
+    
+    private void setupConfigButtons(View view) {
+        // Find the existing buttons from XML
+        MaterialButton exportConfigButton = view.findViewById(R.id.exportConfigButton);
+        MaterialButton importConfigButton = view.findViewById(R.id.importConfigButton);
+        
+        // Set click listeners for the XML buttons
+        if (exportConfigButton != null) {
+            exportConfigButton.setOnClickListener(v -> {
+                if (hasStoragePermission()) {
+                    exportConfig();
+                } else {
+                    requestStoragePermissions();
+                }
+            });
+        }
+        
+        if (importConfigButton != null) {
+            importConfigButton.setOnClickListener(v -> {
+                if (hasStoragePermission()) {
+                    openConfigFileChooser();
+                } else {
+                    requestStoragePermissions();
+                }
+            });
+        }
+    }
+    
+    private void exportConfig() {
+        try {
+            if (!configFile.exists()) {
+                Toast.makeText(requireContext(), "Config file not found. Creating default config first.", Toast.LENGTH_LONG).show();
+                createDefaultConfig();
+            }
+            
+            // Create a temporary file in cache for sharing
+            File cacheDir = requireContext().getCacheDir();
+            File tempConfigFile = new File(cacheDir, "config.json");
+            
+            // Copy config file to cache
+            try (FileInputStream fis = new FileInputStream(configFile);
+                 FileOutputStream fos = new FileOutputStream(tempConfigFile)) {
+                byte[] buffer = new byte[1024];
+                int length;
+                while ((length = fis.read(buffer)) > 0) {
+                    fos.write(buffer, 0, length);
+                }
+            }
+            
+            // Share the file
+            Uri fileUri = FileProvider.getUriForFile(requireContext(), "com.origin.launcher.fileprovider", tempConfigFile);
+            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.setType("application/json");
+            shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(shareIntent, "Export Config"));
+            Toast.makeText(requireContext(), "Config exported successfully!", Toast.LENGTH_SHORT).show();
+            
+        } catch (IOException e) {
+            Toast.makeText(requireContext(), "Failed to export config: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            e.printStackTrace();
+        }
+    }
+    
+    private void openConfigFileChooser() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("application/json");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        startActivityForResult(Intent.createChooser(intent, "Select Config File"), IMPORT_CONFIG_REQUEST_CODE);
+    }
+    
+    private void importConfig(Uri configUri) {
+        try {
+            // Read the selected config file
+            InputStream inputStream = requireContext().getContentResolver().openInputStream(configUri);
+            if (inputStream == null) {
+                Toast.makeText(requireContext(), "Could not read the selected config file", Toast.LENGTH_LONG).show();
+                return;
+            }
+            
+            // Read content
+            StringBuilder content = new StringBuilder();
+            byte[] buffer = new byte[1024];
+            int length;
+            while ((length = inputStream.read(buffer)) > 0) {
+                content.append(new String(buffer, 0, length));
+            }
+            inputStream.close();
+            
+            // Validate JSON
+            try {
+                new JSONObject(content.toString());
+            } catch (JSONException e) {
+                Toast.makeText(requireContext(), "Invalid config file format", Toast.LENGTH_LONG).show();
+                return;
+            }
+            
+            // Ensure config directory exists
+            File parentDir = configFile.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+            
+            // Write to config file
+            try (FileWriter writer = new FileWriter(configFile)) {
+                writer.write(content.toString());
+            }
+            
+            // Reload module states
+            loadModuleStates();
+            
+            Toast.makeText(requireContext(), "Config imported successfully!", Toast.LENGTH_SHORT).show();
+            
+        } catch (IOException e) {
+            Toast.makeText(requireContext(), "Failed to import config: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            e.printStackTrace();
         }
     }
     
@@ -262,48 +389,8 @@ moduleItems.add(new ModuleItem("No Fog", "disables the in-game fog", "no_fog"));
     }
     
     private void createDefaultConfig() {
-    try {
-        // Create parent directory if it doesn't exist
-        File parentDir = configFile.getParentFile();
-        if (parentDir != null && !parentDir.exists()) {
-            boolean created = parentDir.mkdirs();
-            if (!created) {
-                Toast.makeText(requireContext(), "Failed to create config directory", Toast.LENGTH_SHORT).show();
-                return;
-            }
-        }
-        
-        JSONObject defaultConfig = new JSONObject();
-        defaultConfig.put("Nohurtcam", false);
-        defaultConfig.put("no_fog", true);  // Add this line
-        
-        try (FileWriter writer = new FileWriter(configFile)) {
-            writer.write(defaultConfig.toString(2)); // Pretty print with indent
-        }
-        
-    } catch (IOException | JSONException e) {
-        Toast.makeText(requireContext(), "Failed to create default config: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        e.printStackTrace();
-    }
-}
-    
-    private void updateConfigFile(String key, boolean value) {
-    try {
-        JSONObject config;
-        
-        if (configFile.exists()) {
-            // Read existing config
-            StringBuilder content = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new FileReader(configFile))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    content.append(line);
-                }
-            }
-            config = new JSONObject(content.toString());
-        } else {
-            // Create new config and ensure directory exists
-            config = new JSONObject();
+        try {
+            // Create parent directory if it doesn't exist
             File parentDir = configFile.getParentFile();
             if (parentDir != null && !parentDir.exists()) {
                 boolean created = parentDir.mkdirs();
@@ -312,21 +399,64 @@ moduleItems.add(new ModuleItem("No Fog", "disables the in-game fog", "no_fog"));
                     return;
                 }
             }
+            
+            JSONObject defaultConfig = new JSONObject();
+            defaultConfig.put("Nohurtcam", false);
+            defaultConfig.put("Nofog", false);
+            defaultConfig.put("particles_disabler", false);
+            defaultConfig.put("java_clouds", false);
+            defaultConfig.put("java_cubemap", false);
+            
+            try (FileWriter writer = new FileWriter(configFile)) {
+                writer.write(defaultConfig.toString(2)); // Pretty print with indent
+            }
+            
+        } catch (IOException | JSONException e) {
+            Toast.makeText(requireContext(), "Failed to create default config: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            e.printStackTrace();
         }
-        
-        // Update the specific key
-        config.put(key, value);
-        
-        // Write back to file
-        try (FileWriter writer = new FileWriter(configFile)) {
-            writer.write(config.toString(2)); // Pretty print with indent
-        }
-        
-    } catch (IOException | JSONException e) {
-        Toast.makeText(requireContext(), "Failed to update config: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        e.printStackTrace();
     }
-}
+    
+    private void updateConfigFile(String key, boolean value) {
+        try {
+            JSONObject config;
+            
+            if (configFile.exists()) {
+                // Read existing config
+                StringBuilder content = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(new FileReader(configFile))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        content.append(line);
+                    }
+                }
+                config = new JSONObject(content.toString());
+            } else {
+                // Create new config and ensure directory exists
+                config = new JSONObject();
+                File parentDir = configFile.getParentFile();
+                if (parentDir != null && !parentDir.exists()) {
+                    boolean created = parentDir.mkdirs();
+                    if (!created) {
+                        Toast.makeText(requireContext(), "Failed to create config directory", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                }
+            }
+            
+            // Update the specific key
+            config.put(key, value);
+            
+            // Write back to file
+            try (FileWriter writer = new FileWriter(configFile)) {
+                writer.write(config.toString(2)); // Pretty print with indent
+            }
+            
+        } catch (IOException | JSONException e) {
+            Toast.makeText(requireContext(), "Failed to update config: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            e.printStackTrace();
+        }
+    }
 
     private void openFileChooser() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
@@ -356,39 +486,44 @@ moduleItems.add(new ModuleItem("No Fog", "disables the in-game fog", "no_fog"));
             if (saveUri != null && currentRootDir != null) {
                 createBackupAtLocation(saveUri, currentRootDir);
             }
+        } else if (requestCode == IMPORT_CONFIG_REQUEST_CODE && resultCode == getActivity().RESULT_OK && data != null) {
+            Uri configUri = data.getData();
+            if (configUri != null) {
+                importConfig(configUri);
+            }
         }
     }
 
     private void importBackup(Uri zipUri) {
         try {
-            // Find the target directory (where we would normally backup to)
-            String[] possiblePaths = {
-                "/storage/emulated/0/games/com.mojang/",
-                "/storage/emulated/0/Android/data/com.mojang.minecraftpe/files/games/com.mojang/",
-                "/storage/emulated/0/Android/data/com.origin.launcher/files/games/com.mojang/",
-                getContext().getExternalFilesDir(null) + "/games/com.mojang/"
-            };
+            // Use the specific target directory
+            File targetDir = new File("/storage/emulated/0/Android/data/com.origin.launcher/files/games/com.mojang/");
             
-            File targetDir = null;
-            for (String path : possiblePaths) {
-                File testDir = new File(path);
-                if (testDir.exists() || testDir.mkdirs()) {
-                    targetDir = testDir;
-                    break;
+            // Create directory if it doesn't exist
+            if (!targetDir.exists()) {
+                boolean created = targetDir.mkdirs();
+                if (!created) {
+                    Toast.makeText(requireContext(), "Could not create target directory: " + targetDir.getAbsolutePath(), Toast.LENGTH_LONG).show();
+                    return;
                 }
             }
             
-            if (targetDir == null) {
-                Toast.makeText(requireContext(), "Could not find or create Minecraft data directory", Toast.LENGTH_LONG).show();
+            // Check if we can write to the directory
+            if (!targetDir.canWrite()) {
+                Toast.makeText(requireContext(), "Cannot write to target directory: " + targetDir.getAbsolutePath(), Toast.LENGTH_LONG).show();
                 return;
             }
             
-            Toast.makeText(requireContext(), "Importing backup...", Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), "Importing backup to: " + targetDir.getAbsolutePath(), Toast.LENGTH_SHORT).show();
             
             InputStream inputStream = requireContext().getContentResolver().openInputStream(zipUri);
             if (inputStream != null) {
                 extractZip(inputStream, targetDir);
-                Toast.makeText(requireContext(), "Backup imported successfully to: " + targetDir.getAbsolutePath(), Toast.LENGTH_LONG).show();
+                
+                // Update currentRootDir to the new location
+                currentRootDir = targetDir;
+                
+                Toast.makeText(requireContext(), "Backup imported successfully!", Toast.LENGTH_LONG).show();
                 
                 // Refresh the folder list
                 refreshFolderList();
@@ -404,24 +539,46 @@ moduleItems.add(new ModuleItem("No Fog", "disables the in-game fog", "no_fog"));
     private void extractZip(InputStream zipInputStream, File targetDir) throws IOException {
         try (ZipInputStream zis = new ZipInputStream(zipInputStream)) {
             ZipEntry zipEntry;
-            byte[] buffer = new byte[1024];
+            byte[] buffer = new byte[4096]; // Increased buffer size
             
             while ((zipEntry = zis.getNextEntry()) != null) {
                 String fileName = zipEntry.getName();
-                File newFile = new File(targetDir, fileName);
                 
-                // Create parent directories if they don't exist
-                File parentDir = newFile.getParentFile();
-                if (parentDir != null && !parentDir.exists()) {
-                    parentDir.mkdirs();
+                // Security check: prevent directory traversal
+                if (fileName.contains("..")) {
+                    continue;
                 }
                 
-                if (!zipEntry.isDirectory()) {
+                File newFile = new File(targetDir, fileName);
+                
+                if (zipEntry.isDirectory()) {
+                    // Create directory
+                    if (!newFile.exists()) {
+                        boolean created = newFile.mkdirs();
+                        if (!created) {
+                            System.err.println("Failed to create directory: " + newFile.getAbsolutePath());
+                        }
+                    }
+                } else {
+                    // Create parent directories if they don't exist
+                    File parentDir = newFile.getParentFile();
+                    if (parentDir != null && !parentDir.exists()) {
+                        boolean created = parentDir.mkdirs();
+                        if (!created) {
+                            System.err.println("Failed to create parent directory: " + parentDir.getAbsolutePath());
+                            continue;
+                        }
+                    }
+                    
+                    // Extract file
                     try (FileOutputStream fos = new FileOutputStream(newFile)) {
                         int len;
                         while ((len = zis.read(buffer)) > 0) {
                             fos.write(buffer, 0, len);
                         }
+                        fos.flush();
+                    } catch (IOException e) {
+                        System.err.println("Failed to extract file: " + newFile.getAbsolutePath() + " - " + e.getMessage());
                     }
                 }
                 zis.closeEntry();
