@@ -1,6 +1,6 @@
 <p align="center">
   <img src="https://raw.githubusercontent.com/Origin-Client/Origin/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="128" alt="Origin Client Logo" />
-  <h1 align="center">Origin Client</h1>
+  <h1 align="center">Xelo Client</h1>
   <p align="center">
     <b>An open-source Minecraft Bedrock Android client</b><br>
     🧩 Performance | 🎮 Modules | 💡 Customization | 📱 No Root Needed
