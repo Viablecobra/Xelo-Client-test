@@ -211,6 +211,7 @@ public class DashboardFragment extends Fragment {
             moduleItems.add(new ModuleItem("Java Fancy Clouds", "Changes the clouds to Java Fancy Clouds", "java_clouds"));
             moduleItems.add(new ModuleItem("Java Cubemap", "improves the in-game cubemap bringing it abit lower", "java_cubemap"));
             moduleItems.add(new ModuleItem("Classic Vanilla skins", "Disables the newly added skins by mojang", "classic_skins"));
+            moduleItems.add(new ModuleItem("Cape Physics", "Makes your Cape animation more realistic", "cape_physics"));
             
             // Load current config state and populate modules
             loadModuleStates();
@@ -503,6 +504,7 @@ public class DashboardFragment extends Fragment {
             defaultConfig.put("java_clouds", false);
             defaultConfig.put("java_cubemap", false);
             defaultConfig.put("classic_skins", false);
+            defaultConfig.put("cape_physics", false);
             
             try (FileWriter writer = new FileWriter(configFile)) {
                 writer.write(defaultConfig.toString(2)); // Pretty print with indent
