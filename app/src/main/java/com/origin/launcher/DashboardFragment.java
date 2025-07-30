@@ -20,6 +20,7 @@ import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
@@ -30,6 +31,7 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
@@ -74,10 +76,10 @@ public class DashboardFragment extends Fragment {
     private List<Integer> searchMatches = new ArrayList<>();
     private int currentMatchIndex = -1;
     
-    // Modules variables
+    // Modules variables - UPDATED FOR SCROLLVIEW
     private File configFile;
-    private RecyclerView modulesRecyclerView;
-    private ModuleAdapter moduleAdapter;
+    private ScrollView modulesScrollView;
+    private LinearLayout modulesContainer;
     private List<ModuleItem> moduleItems;
     
     // Module data class
@@ -196,11 +198,11 @@ public class DashboardFragment extends Fragment {
         // Initialize config file path
         configFile = new File(getContext().getExternalFilesDir(null), "origin_mods/config.json");
         
-        // Get modules RecyclerView
-        modulesRecyclerView = view.findViewById(R.id.modulesRecyclerView);
-        if (modulesRecyclerView != null) {
-            modulesRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-            
+        // Get ScrollView and container - UPDATED
+        modulesScrollView = view.findViewById(R.id.modulesScrollView);
+        modulesContainer = view.findViewById(R.id.modulesContainer);
+        
+        if (modulesContainer != null) {
             // Initialize module items
             moduleItems = new ArrayList<>();
             moduleItems.add(new ModuleItem("no hurt cam", "allows you to toggle the in-game hurt cam", "Nohurtcam"));
@@ -208,17 +210,115 @@ public class DashboardFragment extends Fragment {
             moduleItems.add(new ModuleItem("Particles Disabler", "allows you to toggle the in-game particles", "particles_disabler"));
             moduleItems.add(new ModuleItem("Java Fancy Clouds", "Changes the clouds to Java Fancy Clouds", "java_clouds"));
             moduleItems.add(new ModuleItem("Java Cubemap", "improves the in-game cubemap bringing it abit lower", "java_cubemap"));
+            moduleItems.add(new ModuleItem("Classic Vanilla skins", "Disables the newly added skins by mojang", "classic_skins"));
             
-            // Create and set adapter
-            moduleAdapter = new ModuleAdapter(moduleItems, this::onModuleToggle);
-            modulesRecyclerView.setAdapter(moduleAdapter);
-            
-            // Load current config state
+            // Load current config state and populate modules
             loadModuleStates();
+            populateModules();
         }
         
         // Set up the existing XML config buttons
         setupConfigButtons(view);
+    }
+    
+    // NEW METHOD: Populate modules in ScrollView
+    private void populateModules() {
+        if (modulesContainer == null) return;
+        
+        // Clear existing modules
+        modulesContainer.removeAllViews();
+        
+        // Add each module as a card view
+        for (ModuleItem module : moduleItems) {
+            View moduleView = createModuleView(module);
+            modulesContainer.addView(moduleView);
+        }
+    }
+    
+    // NEW METHOD: Create individual module views
+    private View createModuleView(ModuleItem module) {
+        // Create a CardView for each module
+        MaterialCardView moduleCard = new MaterialCardView(getContext());
+        
+        // Set layout parameters (width: match_parent, height: wrap_content, margins)
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        cardParams.setMargins(0, 8, 0, 8); // Add some spacing between modules
+        moduleCard.setLayoutParams(cardParams);
+        
+        // Set card properties
+        moduleCard.setRadius(12f);
+        moduleCard.setCardElevation(4f);
+        moduleCard.setStrokeWidth(1);
+        
+        // Set card colors (you may need to adjust these based on your theme)
+        moduleCard.setCardBackgroundColor(ContextCompat.getColor(getContext(), R.color.surface));
+        moduleCard.setStrokeColor(ContextCompat.getColor(getContext(), R.color.outline));
+        
+        // Create inner layout for module content
+        LinearLayout moduleContent = new LinearLayout(getContext());
+        moduleContent.setOrientation(LinearLayout.VERTICAL);
+        moduleContent.setPadding(16, 16, 16, 16);
+        
+        // Create top row with name and switch
+        LinearLayout topRow = new LinearLayout(getContext());
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+        
+        // Add module name
+        TextView moduleNameText = new TextView(getContext());
+        moduleNameText.setText(module.getName());
+        moduleNameText.setTextSize(16f);
+        moduleNameText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurface));
+        moduleNameText.setLayoutParams(new LinearLayout.LayoutParams(
+            0,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            1f
+        ));
+        
+        // Add toggle switch
+        MaterialSwitch moduleSwitch = new MaterialSwitch(getContext());
+        moduleSwitch.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+        
+        // Set switch state and listener
+        moduleSwitch.setChecked(module.isEnabled());
+        moduleSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            module.setEnabled(isChecked);
+            onModuleToggle(module, isChecked);
+        });
+        
+        // Add views to top row
+        topRow.addView(moduleNameText);
+        topRow.addView(moduleSwitch);
+        
+        // Add description
+        TextView moduleDescriptionText = new TextView(getContext());
+        moduleDescriptionText.setText(module.getDescription());
+        moduleDescriptionText.setTextSize(14f);
+        moduleDescriptionText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurfaceVariant));
+        LinearLayout.LayoutParams descParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        descParams.setMargins(0, 8, 0, 0);
+        moduleDescriptionText.setLayoutParams(descParams);
+        
+        // Add views to module content
+        moduleContent.addView(topRow);
+        moduleContent.addView(moduleDescriptionText);
+        
+        // Add content to card
+        moduleCard.addView(moduleContent);
+        
+        return moduleCard;
     }
     
     private void setupConfigButtons(View view) {
@@ -328,8 +428,9 @@ public class DashboardFragment extends Fragment {
                 writer.write(content.toString());
             }
             
-            // Reload module states
+            // Reload module states and refresh UI
             loadModuleStates();
+            populateModules(); // Refresh the UI
             
             Toast.makeText(requireContext(), "Config imported successfully!", Toast.LENGTH_SHORT).show();
             
@@ -377,11 +478,6 @@ public class DashboardFragment extends Fragment {
                 }
             }
             
-            // Notify adapter of changes
-            if (moduleAdapter != null) {
-                moduleAdapter.notifyDataSetChanged();
-            }
-            
         } catch (IOException | JSONException e) {
             Toast.makeText(requireContext(), "Failed to load module config: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             e.printStackTrace();
@@ -406,6 +502,7 @@ public class DashboardFragment extends Fragment {
             defaultConfig.put("particles_disabler", false);
             defaultConfig.put("java_clouds", false);
             defaultConfig.put("java_cubemap", false);
+            defaultConfig.put("classic_skins", false);
             
             try (FileWriter writer = new FileWriter(configFile)) {
                 writer.write(defaultConfig.toString(2)); // Pretty print with indent
@@ -457,6 +554,9 @@ public class DashboardFragment extends Fragment {
             e.printStackTrace();
         }
     }
+
+    // REST OF THE CODE REMAINS THE SAME...
+    // (All the other methods like openFileChooser, openSaveLocationChooser, etc. remain unchanged)
 
     private void openFileChooser() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
@@ -1180,62 +1280,6 @@ public class DashboardFragment extends Fragment {
         }
         void bind(String folderName) {
             textView.setText(folderName);
-        }
-    }
-    
-    // Module adapter
-    private static class ModuleAdapter extends RecyclerView.Adapter<ModuleViewHolder> {
-        private final List<ModuleItem> modules;
-        private final ModuleToggleListener toggleListener;
-        
-        ModuleAdapter(List<ModuleItem> modules, ModuleToggleListener toggleListener) {
-            this.modules = modules;
-            this.toggleListener = toggleListener;
-        }
-        
-        @NonNull
-        @Override
-        public ModuleViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_module, parent, false);
-            return new ModuleViewHolder(view);
-        }
-        
-        @Override
-        public void onBindViewHolder(@NonNull ModuleViewHolder holder, int position) {
-            holder.bind(modules.get(position), toggleListener);
-        }
-        
-        @Override
-        public int getItemCount() { return modules.size(); }
-    }
-    
-    private static class ModuleViewHolder extends RecyclerView.ViewHolder {
-        private final TextView moduleNameText;
-        private final TextView moduleDescriptionText;
-        private final MaterialSwitch moduleToggleSwitch;
-        
-        ModuleViewHolder(@NonNull View itemView) {
-            super(itemView);
-            moduleNameText = itemView.findViewById(R.id.moduleNameText);
-            moduleDescriptionText = itemView.findViewById(R.id.moduleDescriptionText);
-            moduleToggleSwitch = itemView.findViewById(R.id.moduleToggleSwitch);
-        }
-        
-        void bind(ModuleItem module, ModuleToggleListener toggleListener) {
-            moduleNameText.setText(module.getName());
-            moduleDescriptionText.setText(module.getDescription());
-            
-            // Set switch state without triggering listener
-            moduleToggleSwitch.setOnCheckedChangeListener(null);
-            moduleToggleSwitch.setChecked(module.isEnabled());
-            
-            // Set listener after setting state
-            moduleToggleSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                module.setEnabled(isChecked);
-                if (toggleListener != null) {
-                    toggleListener.onToggle(module, isChecked);
-                }
-            });
         }
     }
 }
