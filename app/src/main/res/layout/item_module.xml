@@ -11,53 +11,95 @@
     app:strokeWidth="1dp"
     app:strokeColor="@color/outline">
 
+    <!-- Main container using a vertical LinearLayout to create two rows -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="16dp"
-        android:gravity="center_vertical">
+        android:orientation="vertical"
+        android:padding="16dp">
 
-        <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:src="@android:drawable/ic_menu_preferences"
-            android:tint="@color/primary"
-            android:layout_marginEnd="12dp" />
-
+        <!-- Top row containing the icon, titles, and controls -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-            <TextView
-                android:id="@+id/moduleNameText"
+            <!-- Icon -->
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@android:drawable/ic_menu_emoticons"
+                android:tint="@color/primary"
+                android:layout_marginEnd="12dp" />
+
+            <!-- Title and author stacked vertically -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/moduleNameText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Freemoji"
+                    android:textSize="16sp"
+                    android:textColor="@color/onSurface"
+                    android:textStyle="normal"
+                    android:fontFamily="sans-serif-medium" />
+
+                <!-- New TextView for the author line -->
+                <TextView
+                    android:id="@+id/moduleAuthorText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="by maisy, Rico040"
+                    android:textSize="12sp"
+                    android:textColor="@color/onSurfaceVariant"
+                    android:fontFamily="sans-serif"
+                    android:layout_marginTop="2dp" />
+
+            </LinearLayout>
+
+            <!-- New settings icon -->
+            <ImageView
+                android:id="@+id/settingsButton"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:padding="4dp"
+                android:layout_marginStart="8dp"
+                android:src="@android:drawable/ic_menu_manage" />
+
+            <!-- New info icon -->
+            <ImageView
+                android:id="@+id/infoButton"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:padding="4dp"
+                android:layout_marginStart="8dp"
+                android:src="@android:drawable/ic_dialog_info" />
+
+            <!-- Existing Switch -->
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/moduleToggleSwitch"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Module Name"
-                android:textSize="16sp"
-                android:textColor="@color/onSurface"
-                android:textStyle="normal"
-                android:fontFamily="sans-serif-medium" />
-
-            <TextView
-                android:id="@+id/moduleDescriptionText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Module description"
-                android:textSize="12sp"
-                android:textColor="@color/onSurfaceVariant"
-                android:fontFamily="sans-serif"
-                android:layout_marginTop="2dp" />
+                android:layout_marginStart="8dp" />
 
         </LinearLayout>
 
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/moduleToggleSwitch"
+        <!-- Bottom row for the description -->
+        <TextView
+            android:id="@+id/moduleDescriptionText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp" />
+            android:text="Allows you to use Nitro emoji without Nitro."
+            android:textSize="12sp"
+            android:textColor="@color/onSurfaceVariant"
+            android:fontFamily="sans-serif"
+            android:layout_marginTop="12dp" />
 
     </LinearLayout>
 
