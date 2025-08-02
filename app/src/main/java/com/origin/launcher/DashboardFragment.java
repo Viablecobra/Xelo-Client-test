@@ -206,7 +206,8 @@ public class DashboardFragment extends Fragment {
             // Initialize module items
             moduleItems = new ArrayList<>();
             moduleItems.add(new ModuleItem("no hurt cam", "allows you to toggle the in-game hurt cam", "Nohurtcam"));
-            moduleItems.add(new ModuleItem("No Fog", "allows you to toggle the in-game fog", "Nofog"));
+            moduleItems.add(new ModuleItem("Fullbright", "(Doesnt work with No fog) ofcouse lets u see in the dark moron", "night_vision"));
+            moduleItems.add(new ModuleItem("No Fog", "(Doesnt work with fullbright) allows you to toggle the in-game fog", "Nofog"));
             moduleItems.add(new ModuleItem("Particles Disabler", "allows you to toggle the in-game particles", "particles_disabler"));
             moduleItems.add(new ModuleItem("Java Fancy Clouds", "Changes the clouds to Java Fancy Clouds", "java_clouds"));
             moduleItems.add(new ModuleItem("Java Cubemap", "improves the in-game cubemap bringing it abit lower", "java_cubemap"));
@@ -505,6 +506,7 @@ public class DashboardFragment extends Fragment {
             defaultConfig.put("java_cubemap", false);
             defaultConfig.put("classic_skins", false);
             defaultConfig.put("cape_physics", false);
+            defaultConfig.put("night_vision", false);
             
             try (FileWriter writer = new FileWriter(configFile)) {
                 writer.write(defaultConfig.toString(2)); // Pretty print with indent
