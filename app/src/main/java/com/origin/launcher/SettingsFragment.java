@@ -8,11 +8,26 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.LinearLayout;
 import androidx.fragment.app.Fragment;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.util.DisplayMetrics;
-
+import android.util.Log;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.text.ParseException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import android.os.Handler;
+import android.os.Looper;
 
 public class SettingsFragment extends Fragment {
 
@@ -24,8 +39,13 @@ public class SettingsFragment extends Fragment {
     private TextView deviceArchitectureText;
     private TextView screenResolutionText;
     private TextView totalMemoryText;
+    private LinearLayout commitsContainer;
     private static final String PREF_PACKAGE_NAME = "mc_package_name";
     private static final String DEFAULT_PACKAGE_NAME = "com.mojang.minecraftpe";
+    private static final String GITHUB_API_URL = "https://api.github.com/repos/Xelo-Client/Xelo-Client/commits";
+    private static final String TAG = "SettingsFragment";
+    private ExecutorService executor;
+    private Handler mainHandler;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -42,6 +62,13 @@ public class SettingsFragment extends Fragment {
         screenResolutionText = view.findViewById(R.id.screen_resolution);
         totalMemoryText = view.findViewById(R.id.total_memory);
         
+        // Initialize commits container
+        commitsContainer = view.findViewById(R.id.commits_container);
+        
+        // Initialize executor and handler
+        executor = Executors.newSingleThreadExecutor();
+        mainHandler = new Handler(Looper.getMainLooper());
+        
         // Load saved package name
         SharedPreferences prefs = requireContext().getSharedPreferences("settings", 0);
         String savedPackageName = prefs.getString(PREF_PACKAGE_NAME, DEFAULT_PACKAGE_NAME);
@@ -56,6 +83,9 @@ public class SettingsFragment extends Fragment {
         
         // Load device information
         loadDeviceInformation();
+        
+        // Load commits
+        loadCommits();
         
         return view;
     }
@@ -103,9 +133,180 @@ public class SettingsFragment extends Fragment {
         totalMemoryText.setText("Total Memory: " + totalMemoryMB + " MB");
     }
     
+    private void loadCommits() {
+        executor.execute(() -> {
+            String result = fetchCommitsFromApi();
+            mainHandler.post(() -> {
+                if (result != null && isAdded()) {
+                    parseAndDisplayCommits(result);
+                } else if (isAdded()) {
+                    displayErrorMessage();
+                }
+            });
+        });
+    }
+    
+    private String fetchCommitsFromApi() {
+        try {
+            URL url = new URL(GITHUB_API_URL + "?per_page=5");
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("Accept", "application/vnd.github.v3+json");
+            connection.setConnectTimeout(10000);
+            connection.setReadTimeout(10000);
+            
+            int responseCode = connection.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+                StringBuilder response = new StringBuilder();
+                String line;
+                
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                reader.close();
+                return response.toString();
+            } else {
+                Log.e(TAG, "HTTP Error: " + responseCode);
+                return null;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error fetching commits", e);
+            return null;
+        }
+    }
+    
+    private void parseAndDisplayCommits(String jsonResponse) {
+        try {
+            JSONArray commits = new JSONArray(jsonResponse);
+            commitsContainer.removeAllViews();
+            
+            for (int i = 0; i < Math.min(commits.length(), 5); i++) {
+                JSONObject commit = commits.getJSONObject(i);
+                JSONObject commitData = commit.getJSONObject("commit");
+                JSONObject author = commitData.getJSONObject("author");
+                
+                String message = commitData.getString("message");
+                String authorName = author.getString("name");
+                String sha = commit.getString("sha").substring(0, 7);
+                String dateStr = author.getString("date");
+                
+                // Parse and format date
+                String formattedDate = formatDate(dateStr);
+                
+                // Create commit view
+                createCommitView(message, authorName, sha, formattedDate);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing commits", e);
+            displayErrorMessage();
+        }
+    }
+    
+    private void createCommitView(String message, String author, String sha, String date) {
+        // Create main container
+        LinearLayout commitLayout = new LinearLayout(getContext());
+        commitLayout.setOrientation(LinearLayout.VERTICAL);
+        commitLayout.setPadding(0, 16, 0, 16);
+        
+        // Create header with author and commit info
+        LinearLayout headerLayout = new LinearLayout(getContext());
+        headerLayout.setOrientation(LinearLayout.HORIZONTAL);
+        
+        // Author name
+        TextView authorText = new TextView(getContext());
+        authorText.setText(author);
+        authorText.setTextSize(14);
+        authorText.setTextColor(0xFFFFFFFF); // White text
+        
+        // Bullet separator
+        TextView bulletText = new TextView(getContext());
+        bulletText.setText(" • ");
+        bulletText.setTextSize(14);
+        bulletText.setTextColor(0xFF888888); // Gray text
+        
+        // SHA
+        TextView shaText = new TextView(getContext());
+        shaText.setText(sha);
+        shaText.setTextSize(14);
+        shaText.setTextColor(0xFF888888); // Gray text
+        
+        // Date
+        TextView dateText = new TextView(getContext());
+        dateText.setText(date);
+        dateText.setTextSize(12);
+        dateText.setTextColor(0xFF888888); // Gray text
+        LinearLayout.LayoutParams dateParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, 
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        dateParams.weight = 1;
+        dateParams.gravity = android.view.Gravity.END;
+        dateText.setLayoutParams(dateParams);
+        dateText.setGravity(android.view.Gravity.END);
+        
+        headerLayout.addView(authorText);
+        headerLayout.addView(bulletText);
+        headerLayout.addView(shaText);
+        headerLayout.addView(dateText);
+        
+        // Commit message
+        TextView messageText = new TextView(getContext());
+        messageText.setText(message);
+        messageText.setTextSize(16);
+        messageText.setTextColor(0xFFFFFFFF); // White text
+        messageText.setPadding(0, 8, 0, 0);
+        
+        commitLayout.addView(headerLayout);
+        commitLayout.addView(messageText);
+        
+        commitsContainer.addView(commitLayout);
+        
+        // Add separator line (except for last item)
+        View separator = new View(getContext());
+        separator.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 1));
+        separator.setBackgroundColor(0xFF333333); // Dark gray separator
+        LinearLayout.LayoutParams separatorParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 1);
+        separatorParams.setMargins(0, 16, 0, 0);
+        separator.setLayoutParams(separatorParams);
+        commitsContainer.addView(separator);
+    }
+    
+    private String formatDate(String isoDate) {
+        try {
+            SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+            SimpleDateFormat outputFormat = new SimpleDateFormat("dd/MM/yy", Locale.US);
+            Date date = inputFormat.parse(isoDate);
+            return outputFormat.format(date);
+        } catch (ParseException e) {
+            Log.e(TAG, "Error parsing date: " + isoDate, e);
+            return "Unknown";
+        }
+    }
+    
+    private void displayErrorMessage() {
+        commitsContainer.removeAllViews();
+        TextView errorText = new TextView(getContext());
+        errorText.setText("Unable to load commits. Check your internet connection.");
+        errorText.setTextColor(0xFF888888);
+        errorText.setTextSize(14);
+        errorText.setPadding(0, 16, 0, 16);
+        commitsContainer.addView(errorText);
+    }
+    
     @Override
     public void onPause() {
         super.onPause();
         savePackageName();
+    }
+    
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (executor != null) {
+            executor.shutdown();
+        }
     }
 }
