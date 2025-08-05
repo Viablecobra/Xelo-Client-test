@@ -185,6 +185,7 @@
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
         app:cardCornerRadius="16dp"
         app:cardElevation="8dp"
         app:cardBackgroundColor="@color/surface"
@@ -272,6 +273,107 @@
                     android:text="Total Memory: Loading..."
                     android:textSize="14sp"
                     android:textColor="@color/onSurface" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Community Links Card -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp"
+        app:cardBackgroundColor="@color/surface"
+        app:strokeWidth="1dp"
+        app:strokeColor="@color/outline">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Community"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="@color/onSurface"
+                android:layout_marginBottom="24dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:weightSum="2">
+
+                <!-- GitHub Button -->
+                <LinearLayout
+                    android:id="@+id/github_button"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="16dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_github"
+                        android:layout_marginBottom="8dp"
+                        android:contentDescription="GitHub" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="GitHub"
+                        android:textSize="16sp"
+                        android:textColor="@color/onSurface"
+                        android:gravity="center" />
+
+                </LinearLayout>
+
+                <!-- Discord Button -->
+                <LinearLayout
+                    android:id="@+id/discord_button"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="16dp"
+                    android:layout_marginStart="8dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_discord"
+                        android:layout_marginBottom="8dp"
+                        android:contentDescription="Discord" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Discord"
+                        android:textSize="16sp"
+                        android:textColor="@color/onSurface"
+                        android:gravity="center" />
+
+                </LinearLayout>
 
             </LinearLayout>
 
