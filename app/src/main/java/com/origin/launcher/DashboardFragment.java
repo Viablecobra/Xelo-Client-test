@@ -214,7 +214,7 @@ public class DashboardFragment extends Fragment {
             moduleItems.add(new ModuleItem("Classic Vanilla skins", "Disables the newly added skins by mojang", "classic_skins"));
             moduleItems.add(new ModuleItem("Cape Physics", "Makes your Cape animation more realistic", "cape_physics"));
             moduleItems.add(new ModuleItem("Xelo Title", "Changes the Start screen title image", "xelo_title"));
-            moduleItems.add(new ModuleItem("Client-side Capes", "allows you to have custom capes(only visible to you)", "client_capes"));
+            moduleItems.add(new ModuleItem("White Block Outline", "changes the block selection outline to white", "white_block_outline"));
             
             // Load current config state and populate modules
             loadModuleStates();
@@ -507,7 +507,7 @@ public class DashboardFragment extends Fragment {
             defaultConfig.put("java_clouds", false);
             defaultConfig.put("java_cubemap", false);
             defaultConfig.put("classic_skins", false);
-            defaultConfig.put("client_capes", false);
+            defaultConfig.put("white_block_outline", false);
             defaultConfig.put("cape_physics", false);
             defaultConfig.put("night_vision", false);
             defaultConfig.put("xelo_title", true);
