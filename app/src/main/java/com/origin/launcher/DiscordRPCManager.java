@@ -1,9 +1,9 @@
 package com.origin.launcher;
 
-import net.arikia.dev.drpc.DiscordEventHandlers;
-import net.arikia.dev.drpc.DiscordRPC;
-import net.arikia.dev.drpc.DiscordRichPresence;
 import android.util.Log;
+import club.minnced.discord.rpc.DiscordEventHandlers;
+import club.minnced.discord.rpc.DiscordRPC;
+import club.minnced.discord.rpc.DiscordRichPresence;
 
 public class DiscordRPCManager {
     private static final String TAG = "DiscordRPC";
@@ -20,28 +20,12 @@ public class DiscordRPCManager {
         }
 
         try {
-            DiscordEventHandlers handlers = new DiscordEventHandlers.Builder()
-                .setReadyEventHandler((user) -> {
-                    Log.i(TAG, "Discord RPC Ready! User: " + user.username + "#" + user.discriminator);
-                })
-                .setErroredEventHandler((errorCode, message) -> {
-                    Log.e(TAG, "Discord RPC Error: " + errorCode + " - " + message);
-                })
-                .setDisconnectedEventHandler((errorCode, message) -> {
-                    Log.w(TAG, "Discord RPC Disconnected: " + errorCode + " - " + message);
-                })
-                .setJoinGameEventHandler((secret) -> {
-                    Log.i(TAG, "Join Game: " + secret);
-                })
-                .setSpectateGameEventHandler((secret) -> {
-                    Log.i(TAG, "Spectate Game: " + secret);
-                })
-                .setJoinRequestEventHandler((request) -> {
-                    Log.i(TAG, "Join Request: " + request.username + "#" + request.discriminator);
-                })
-                .build();
+            DiscordEventHandlers handlers = new DiscordEventHandlers();
+            handlers.ready = (user) -> Log.i(TAG, "Discord RPC Ready! User: " + user.username + "#" + user.discriminator);
+            handlers.errored = (errorCode, message) -> Log.e(TAG, "Discord RPC Error: " + errorCode + " - " + message);
+            handlers.disconnected = (errorCode, message) -> Log.w(TAG, "Discord RPC Disconnected: " + errorCode + " - " + message);
 
-            DiscordRPC.discordInitialize(APPLICATION_ID, handlers, true);
+            DiscordRPC.INSTANCE.Discord_Initialize(APPLICATION_ID, handlers, true, "");
             isInitialized = true;
             shouldRunCallbacks = true;
 
@@ -49,7 +33,7 @@ public class DiscordRPCManager {
             callbackThread = new Thread(() -> {
                 while (shouldRunCallbacks && !Thread.currentThread().isInterrupted()) {
                     try {
-                        DiscordRPC.discordRunCallbacks();
+                        DiscordRPC.INSTANCE.Discord_RunCallbacks();
                         Thread.sleep(2000);
                     } catch (InterruptedException e) {
                         Log.d(TAG, "Callback thread interrupted");
@@ -75,16 +59,17 @@ public class DiscordRPCManager {
         }
 
         try {
-            DiscordRichPresence.Builder presenceBuilder = new DiscordRichPresence.Builder(state)
-                .setDetails(details)
-                .setStartTimestamps(System.currentTimeMillis());
-
+            DiscordRichPresence presence = new DiscordRichPresence();
+            presence.startTimestamp = System.currentTimeMillis() / 1000;
+            presence.details = details;
+            presence.state = state;
+            
             if (largeImageKey != null && !largeImageKey.isEmpty()) {
-                presenceBuilder.setLargeImage(largeImageKey, largeImageText);
+                presence.largeImageKey = largeImageKey;
+                presence.largeImageText = largeImageText;
             }
 
-            DiscordRichPresence presence = presenceBuilder.build();
-            DiscordRPC.discordUpdatePresence(presence);
+            DiscordRPC.INSTANCE.Discord_UpdatePresence(presence);
             
             Log.d(TAG, "Discord presence updated - State: " + state + ", Details: " + details);
         } catch (Exception e) {
@@ -102,7 +87,7 @@ public class DiscordRPCManager {
         }
 
         try {
-            DiscordRPC.discordClearPresence();
+            DiscordRPC.INSTANCE.Discord_ClearPresence();
             Log.d(TAG, "Discord presence cleared");
         } catch (Exception e) {
             Log.e(TAG, "Failed to clear Discord presence", e);
@@ -120,13 +105,13 @@ public class DiscordRPCManager {
             if (callbackThread != null && callbackThread.isAlive()) {
                 callbackThread.interrupt();
                 try {
-                    callbackThread.join(1000); // Wait up to 1 second for thread to finish
+                    callbackThread.join(1000);
                 } catch (InterruptedException e) {
                     Log.w(TAG, "Interrupted while waiting for callback thread to finish");
                 }
             }
 
-            DiscordRPC.discordShutdown();
+            DiscordRPC.INSTANCE.Discord_Shutdown();
             isInitialized = false;
             
             Log.i(TAG, "Discord RPC shutdown successfully");
