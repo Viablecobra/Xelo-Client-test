@@ -7,21 +7,20 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MainActivity extends AppCompatActivity {
 
+    private DiscordManager discordManager;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Initialize Discord RPC
-        DiscordRPCManager.initializeRPC();
+        // Initialize Discord Manager
+        discordManager = new DiscordManager(this);
         
-        // Set initial Discord presence
-        DiscordRPCManager.updatePresence(
-            "Using Xelo Client",
-            "Browsing home screen",
-            "untitled224_20250729210331", // Your uploaded Discord asset
-            "Xelo Client v1.3"
-        );
+        // Update Discord presence if logged in
+        if (discordManager.isLoggedIn()) {
+            discordManager.updatePresence("Using Xelo Client", "Browsing home screen");
+        }
 
         BottomNavigationView bottomNavigationView = findViewById(R.id.bottom_navigation);
         bottomNavigationView.setOnItemSelectedListener(item -> {
@@ -44,13 +43,10 @@ public class MainActivity extends AppCompatActivity {
                     .replace(R.id.fragment_container, selectedFragment)
                     .commit();
                 
-                // Update Discord presence based on current screen
-                DiscordRPCManager.updatePresence(
-                    "Using Xelo Client",
-                    presenceDetails,
-                    "untitled224_20250729210331",
-                    "Xelo Client v1.3"
-                );
+                // Update Discord presence if logged in
+                if (discordManager.isLoggedIn()) {
+                    discordManager.updatePresence("Using Xelo Client", presenceDetails);
+                }
                 
                 return true;
             }
@@ -69,13 +65,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         // Update presence when app comes to foreground
-        if (DiscordRPCManager.isInitialized()) {
-            DiscordRPCManager.updatePresence(
-                "Using Xelo Client",
-                "Active in launcher",
-                "untitled224_20250729210331",
-                "Xelo Client v1.3"
-            );
+        if (discordManager != null && discordManager.isLoggedIn()) {
+            discordManager.updatePresence("Using Xelo Client", "Active in launcher");
         }
     }
 
@@ -83,20 +74,17 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         // Update presence when app goes to background
-        if (DiscordRPCManager.isInitialized()) {
-            DiscordRPCManager.updatePresence(
-                "Xelo Client",
-                "Running in background",
-                "untitled224_20250729210331",
-                "Xelo Client v1.3"
-            );
+        if (discordManager != null && discordManager.isLoggedIn()) {
+            discordManager.updatePresence("Xelo Client", "Running in background");
         }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Shutdown Discord RPC when app is destroyed
-        DiscordRPCManager.shutdownRPC();
+        // Clean up Discord manager
+        if (discordManager != null) {
+            discordManager.destroy();
+        }
     }
 }

@@ -12,6 +12,7 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.LinearLayout;
 import android.widget.Toast;
+import android.widget.Button;
 import androidx.fragment.app.Fragment;
 import android.app.ActivityManager;
 import android.content.Context;
@@ -32,7 +33,7 @@ import java.util.concurrent.Executors;
 import android.os.Handler;
 import android.os.Looper;
 
-public class SettingsFragment extends Fragment {
+public class SettingsFragment extends Fragment implements DiscordManager.DiscordLoginCallback {
 
     private EditText packageNameEdit;
     private TextView deviceModelText;
@@ -45,6 +46,12 @@ public class SettingsFragment extends Fragment {
     private LinearLayout commitsContainer;
     private LinearLayout githubButton;
     private LinearLayout discordButton;
+    
+    // Discord components
+    private Button discordLoginButton;
+    private TextView discordStatusText;
+    private TextView discordUserText;
+    private DiscordManager discordManager;
     
     private static final String PREF_PACKAGE_NAME = "mc_package_name";
     private static final String DEFAULT_PACKAGE_NAME = "com.mojang.minecraftpe";
@@ -77,6 +84,15 @@ public class SettingsFragment extends Fragment {
         githubButton = view.findViewById(R.id.github_button);
         discordButton = view.findViewById(R.id.discord_button);
         
+        // Initialize Discord components
+        discordLoginButton = view.findViewById(R.id.discord_login_button);
+        discordStatusText = view.findViewById(R.id.discord_status_text);
+        discordUserText = view.findViewById(R.id.discord_user_text);
+        
+        // Initialize Discord manager
+        discordManager = new DiscordManager(getContext());
+        discordManager.setCallback(this);
+        
         // Initialize executor and handler
         executor = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
@@ -96,6 +112,12 @@ public class SettingsFragment extends Fragment {
         // Set up button click listeners
         setupButtonListeners();
         
+        // Setup Discord login button
+        setupDiscordButton();
+        
+        // Update Discord UI
+        updateDiscordUI();
+        
         // Load device information
         loadDeviceInformation();
         
@@ -108,6 +130,66 @@ public class SettingsFragment extends Fragment {
     private void setupButtonListeners() {
         githubButton.setOnClickListener(v -> openUrl(GITHUB_URL, "GitHub"));
         discordButton.setOnClickListener(v -> openUrl(DISCORD_URL, "Discord"));
+    }
+    
+    private void setupDiscordButton() {
+        discordLoginButton.setOnClickListener(v -> {
+            if (discordManager.isLoggedIn()) {
+                // Show logout confirmation
+                new androidx.appcompat.app.AlertDialog.Builder(getContext())
+                    .setTitle("Logout from Discord")
+                    .setMessage("Are you sure you want to logout from Discord?")
+                    .setPositiveButton("Logout", (dialog, which) -> discordManager.logout())
+                    .setNegativeButton("Cancel", null)
+                    .show();
+            } else {
+                discordManager.login();
+            }
+        });
+    }
+    
+    private void updateDiscordUI() {
+        if (discordManager.isLoggedIn()) {
+            DiscordManager.DiscordUser user = discordManager.getCurrentUser();
+            discordStatusText.setText("Connected");
+            discordStatusText.setTextColor(0xFF4CAF50); // Green
+            discordUserText.setText("Logged in as: " + user.displayName);
+            discordUserText.setVisibility(View.VISIBLE);
+            discordLoginButton.setText("Logout");
+        } else {
+            discordStatusText.setText("Not connected");
+            discordStatusText.setTextColor(0xFFF44336); // Red
+            discordUserText.setVisibility(View.GONE);
+            discordLoginButton.setText("Login with Discord");
+        }
+    }
+    
+    // Discord callback methods
+    @Override
+    public void onLoginSuccess(DiscordManager.DiscordUser user) {
+        if (isAdded()) {
+            Toast.makeText(getContext(), "Successfully logged in as " + user.displayName, Toast.LENGTH_SHORT).show();
+            updateDiscordUI();
+            
+            // Update Rich Presence
+            discordManager.updatePresence("Using Xelo Client", "Browsing settings");
+        }
+    }
+    
+    @Override
+    public void onLoginError(String error) {
+        if (isAdded()) {
+            Toast.makeText(getContext(), "Discord login failed: " + error, Toast.LENGTH_LONG).show();
+            updateDiscordUI();
+        }
+    }
+    
+    @Override
+    public void onLogout() {
+        if (isAdded()) {
+            Toast.makeText(getContext(), "Logged out from Discord", Toast.LENGTH_SHORT).show();
+            updateDiscordUI();
+        }
     }
     
     private void openUrl(String url, String appName) {
@@ -340,6 +422,9 @@ public class SettingsFragment extends Fragment {
         super.onDestroy();
         if (executor != null) {
             executor.shutdown();
+        }
+        if (discordManager != null) {
+            discordManager.destroy();
         }
     }
 }
