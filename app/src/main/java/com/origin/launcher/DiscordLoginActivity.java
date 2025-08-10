@@ -2,46 +2,57 @@ package com.origin.launcher;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
 import android.webkit.CookieManager;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
-import java.net.URLDecoder;
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.WebSocket;
+import okhttp3.WebSocketListener;
+import org.json.JSONObject;
 
 public class DiscordLoginActivity extends AppCompatActivity {
     private static final String TAG = "DiscordLoginActivity";
-    private static final String CLIENT_ID = "1403634750559752296";
-    private static final String REDIRECT_URI = "https://xelo-client.github.io/discord-callback.html";
-    private static final String SCOPE = "identify rpc";
     
     private WebView webView;
     private ProgressBar progressBar;
-    private DiscordLoginCallback callback;
-    private boolean callbackHandled = false;
-    
-    public interface DiscordLoginCallback {
-        void onLoginSuccess(String accessToken, String userId, String username, String discriminator, String avatar);
-        void onLoginError(String error);
-    }
+    private ExtendedFloatingActionButton backButton;
+    private ExecutorService executor;
+    private Handler mainHandler;
+    private boolean isTokenExtractionInProgress = false;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_discord_login);
         
-        // Reset callback flag
-        callbackHandled = false;
+        executor = Executors.newSingleThreadExecutor();
+        mainHandler = new Handler(Looper.getMainLooper());
         
-        // Setup toolbar
+        setupToolbar();
+        initializeViews();
+        setupWebView();
+        loadDiscordLogin();
+    }
+    
+    private void setupToolbar() {
         Toolbar toolbar = findViewById(R.id.toolbar);
         if (toolbar != null) {
             setSupportActionBar(toolbar);
@@ -50,18 +61,22 @@ public class DiscordLoginActivity extends AppCompatActivity {
                 getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             }
         }
-        
+    }
+    
+    private void initializeViews() {
         webView = findViewById(R.id.webview);
         progressBar = findViewById(R.id.progress_bar);
+        backButton = findViewById(R.id.back_button);
         
         if (webView == null) {
             Log.e(TAG, "WebView not found in layout");
-            finish();
+            finishWithError("WebView initialization failed");
             return;
         }
         
-        setupWebView();
-        loadDiscordLogin();
+        if (backButton != null) {
+            backButton.setOnClickListener(v -> onBackPressed());
+        }
     }
     
     private void setupWebView() {
@@ -69,47 +84,35 @@ public class DiscordLoginActivity extends AppCompatActivity {
             WebSettings settings = webView.getSettings();
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
+            settings.setDatabaseEnabled(true);
+            settings.setAppCacheEnabled(true);
             settings.setLoadWithOverviewMode(true);
             settings.setUseWideViewPort(true);
             settings.setSupportZoom(true);
             settings.setBuiltInZoomControls(true);
             settings.setDisplayZoomControls(false);
             settings.setUserAgentString(settings.getUserAgentString() + " XeloClient/1.0");
-            settings.setTextZoom(100);
-            settings.setSupportMultipleWindows(false);
-            settings.setLoadsImagesAutomatically(true);
-            settings.setBlockNetworkImage(false);
-            settings.setLayoutAlgorithm(WebSettings.LayoutAlgorithm.NORMAL);
-            settings.setSaveFormData(true);
-            settings.setSavePassword(true);
-            settings.setMinimumFontSize(14);
+            
         } catch (Exception e) {
             Log.e(TAG, "Error setting up WebView", e);
-            Toast.makeText(this, "Error setting up WebView: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            finish();
+            finishWithError("WebView setup failed: " + e.getMessage());
             return;
         }
         
-        // Enable scrolling
         webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
         webView.setScrollbarFadingEnabled(true);
-        
-        // Clear cache and cookies
-        webView.clearCache(true);
-        webView.clearHistory();
-        CookieManager cookieManager = CookieManager.getInstance();
-        cookieManager.removeAllCookies(null);
-        cookieManager.flush();
         
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                Log.d(TAG, "WebView shouldOverrideUrlLoading: " + url);
+                Log.d(TAG, "shouldOverrideUrlLoading: " + url);
                 
-                if ((url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) && !callbackHandled) {
-                    Log.d(TAG, "Redirect detected, handling callback: " + url);
-                    callbackHandled = true;
-                    handleCallback(url);
+                // Check if user reached Discord's main app page (indicates successful login)
+                if (url != null && url.endsWith("/app") && !isTokenExtractionInProgress) {
+                    Log.d(TAG, "User reached Discord app page, extracting token...");
+                    isTokenExtractionInProgress = true;
+                    webView.stopLoading();
+                    extractTokenAndFinish();
                     return true;
                 }
                 
@@ -117,225 +120,256 @@ public class DiscordLoginActivity extends AppCompatActivity {
             }
             
             @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                progressBar.setVisibility(View.GONE);
-                Log.d(TAG, "Page finished loading: " + url);
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                Log.d(TAG, "onPageStarted: " + url);
+                progressBar.setVisibility(View.VISIBLE);
                 
-                if ((url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) && !callbackHandled) {
-                    Log.d(TAG, "Redirect detected in onPageFinished: " + url);
-                    callbackHandled = true;
-                    handleCallback(url);
+                // Also check here for app page
+                if (url != null && url.endsWith("/app") && !isTokenExtractionInProgress) {
+                    Log.d(TAG, "User reached Discord app page (onPageStarted), extracting token...");
+                    isTokenExtractionInProgress = true;
+                    extractTokenAndFinish();
                 }
             }
             
             @Override
-            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                super.onPageStarted(view, url, favicon);
-                progressBar.setVisibility(View.VISIBLE);
-                Log.d(TAG, "Page started loading: " + url);
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                Log.d(TAG, "onPageFinished: " + url);
+                progressBar.setVisibility(View.GONE);
                 
-                if ((url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) && !callbackHandled) {
-                    Log.d(TAG, "Early redirect detection: " + url);
-                    callbackHandled = true;
-                    handleCallback(url);
+                // Final check for app page
+                if (url != null && url.endsWith("/app") && !isTokenExtractionInProgress) {
+                    Log.d(TAG, "User reached Discord app page (onPageFinished), extracting token...");
+                    isTokenExtractionInProgress = true;
+                    extractTokenAndFinish();
                 }
             }
             
             @Override
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
                 super.onReceivedError(view, errorCode, description, failingUrl);
+                Log.e(TAG, "WebView error: " + description + " for URL: " + failingUrl + " (Code: " + errorCode + ")");
                 progressBar.setVisibility(View.GONE);
-                Log.e(TAG, "WebView error: " + description + " for URL: " + failingUrl);
                 
-                if (!failingUrl.startsWith(REDIRECT_URI)) {
-                    Toast.makeText(DiscordLoginActivity.this, 
-                        "Error loading page: " + description, Toast.LENGTH_LONG).show();
-                }
+                Toast.makeText(DiscordLoginActivity.this, 
+                    "Error loading page: " + description, Toast.LENGTH_LONG).show();
             }
         });
     }
     
     private void loadDiscordLogin() {
         try {
-            String authUrl = "https://discord.com/oauth2/authorize?" +
-                "client_id=" + CLIENT_ID +
-                "&redirect_uri=" + Uri.encode(REDIRECT_URI) +
-                "&response_type=token" +
-                "&scope=" + Uri.encode(SCOPE);
-            
-            Log.d(TAG, "Loading Discord login URL: " + authUrl);
-            webView.loadUrl(authUrl);
+            Log.d(TAG, "Loading Discord login page");
+            webView.loadUrl("https://discord.com/login");
         } catch (Exception e) {
             Log.e(TAG, "Error loading Discord login URL", e);
-            Toast.makeText(this, "Error loading Discord login: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            finish();
+            finishWithError("Error loading Discord login: " + e.getMessage());
         }
     }
     
-    private void handleCallback(String callbackUrl) {
-        Log.d(TAG, "Handling callback URL: " + callbackUrl);
+    private void extractTokenAndFinish() {
+        mainHandler.post(() -> {
+            progressBar.setVisibility(View.VISIBLE);
+            if (backButton != null) {
+                backButton.setText("Extracting token...");
+                backButton.setEnabled(false);
+            }
+        });
         
-        // Prevent multiple callback handling
-        if (callbackHandled && !callbackUrl.contains("#access_token=")) {
-            Log.d(TAG, "Callback already handled, ignoring");
-            return;
-        }
-        
-        try {
-            String accessToken = null;
-            String errorParam = null;
-            
-            // Parse URL for access token (implicit flow returns token in URL fragment)
-            if (callbackUrl.contains("#")) {
-                String fragment = callbackUrl.substring(callbackUrl.indexOf("#") + 1);
-                Log.d(TAG, "URL fragment: " + fragment);
+        executor.execute(() -> {
+            try {
+                Log.d(TAG, "Starting token extraction process");
                 
-                String[] params = fragment.split("&");
-                for (String param : params) {
-                    if (param.contains("=")) {
-                        String[] keyValue = param.split("=", 2);
-                        if (keyValue.length == 2) {
-                            String key = keyValue[0];
-                            String value = URLDecoder.decode(keyValue[1], "UTF-8");
-                            
-                            Log.d(TAG, "Param: " + key + " = " + value);
-                            
-                            if ("access_token".equals(key)) {
-                                accessToken = value;
-                            } else if ("error".equals(key)) {
-                                errorParam = value;
-                            }
+                // Wait a moment for the WebView to save data
+                Thread.sleep(2000);
+                
+                String token = extractTokenFromStorage();
+                
+                if (token != null && !token.isEmpty()) {
+                    Log.d(TAG, "Token extracted successfully, validating...");
+                    validateTokenAndGetUserInfo(token);
+                } else {
+                    Log.e(TAG, "Failed to extract token from storage");
+                    mainHandler.post(() -> finishWithError("Failed to extract Discord token"));
+                }
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Error during token extraction", e);
+                mainHandler.post(() -> finishWithError("Error extracting token: " + e.getMessage()));
+            }
+        });
+    }
+    
+    private String extractTokenFromStorage() {
+        try {
+            // Path to WebView's local storage (similar to your friend's implementation)
+            File webViewDir = new File(getFilesDir().getParentFile(), "app_webview/Default/Local Storage/leveldb");
+            
+            if (!webViewDir.exists()) {
+                Log.w(TAG, "WebView storage directory not found");
+                return null;
+            }
+            
+            File[] logFiles = webViewDir.listFiles((dir, name) -> name.endsWith(".log"));
+            
+            if (logFiles == null || logFiles.length == 0) {
+                Log.w(TAG, "No log files found in WebView storage");
+                return null;
+            }
+            
+            // Read the first log file (usually contains the token)
+            try (BufferedReader reader = new BufferedReader(new FileReader(logFiles[0]))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.contains("token")) {
+                        // Extract token from the line
+                        int tokenStart = line.indexOf("token") + 5;
+                        String substring = line.substring(tokenStart);
+                        int quoteStart = substring.indexOf("\"") + 1;
+                        String tokenPart = substring.substring(quoteStart);
+                        int quoteEnd = tokenPart.indexOf("\"");
+                        
+                        if (quoteEnd > 0) {
+                            String token = tokenPart.substring(0, quoteEnd);
+                            Log.d(TAG, "Found token in storage");
+                            return token;
                         }
                     }
                 }
             }
             
-            // Also check query parameters as fallback
-            if (accessToken == null) {
-                Uri uri = Uri.parse(callbackUrl);
-                accessToken = uri.getQueryParameter("access_token");
-                if (errorParam == null) {
-                    errorParam = uri.getQueryParameter("error");
-                }
-            }
-            
-            if (errorParam != null) {
-                Log.e(TAG, "Discord OAuth error: " + errorParam);
-                Intent errorIntent = new Intent().putExtra("error", "Discord authorization failed: " + errorParam);
-                Log.d(TAG, "Setting result CANCELED with error: " + errorParam);
-                setResult(RESULT_CANCELED, errorIntent);
-                finish();
-                return;
-            }
-            
-            if (accessToken != null && !accessToken.isEmpty()) {
-                Log.d(TAG, "Access token received, fetching user info");
-                fetchUserInfo(accessToken);
-            } else {
-                Log.e(TAG, "No access token received in callback");
-                Intent errorIntent = new Intent().putExtra("error", "No access token received");
-                Log.d(TAG, "Setting result CANCELED with error: No access token received");
-                setResult(RESULT_CANCELED, errorIntent);
-                finish();
-            }
         } catch (Exception e) {
-            Log.e(TAG, "Error handling callback", e);
-            setResult(RESULT_CANCELED, new Intent().putExtra("error", "Error processing callback: " + e.getMessage()));
-            finish();
+            Log.e(TAG, "Error reading WebView storage", e);
         }
+        
+        return null;
     }
     
-    private void fetchUserInfo(String accessToken) {
-        new Thread(() -> {
-            try {
-                Log.d(TAG, "Fetching user information");
+    private void validateTokenAndGetUserInfo(String token) {
+        // Similar to your friend's validation approach - test the token with Discord Gateway
+        try {
+            OkHttpClient client = new OkHttpClient();
+            Request request = new Request.Builder()
+                .url("wss://gateway.discord.gg/?v=10&encoding=json")
+                .build();
+            
+            WebSocket webSocket = client.newWebSocket(request, new WebSocketListener() {
+                private boolean identificationSent = false;
                 
-                java.net.URL url = new java.net.URL("https://discord.com/api/v10/users/@me");
-                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("GET");
-                conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-                conn.setRequestProperty("User-Agent", "XeloClient/1.0");
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(15000);
-                
-                int responseCode = conn.getResponseCode();
-                Log.d(TAG, "User info response code: " + responseCode);
-                
-                if (responseCode == 200) {
-                    String response = readResponse(conn);
-                    Log.d(TAG, "User info response: " + response);
-                    
-                    org.json.JSONObject userJson = new org.json.JSONObject(response);
-                    
-                    String id = userJson.getString("id");
-                    String username = userJson.getString("username");
-                    String discriminator = userJson.optString("discriminator", "0");
-                    String avatar = userJson.optString("avatar", "");
-                    
-                    Log.d(TAG, "User info retrieved for: " + username);
-                    
-                    // Return success result
-                    Intent resultIntent = new Intent();
-                    resultIntent.putExtra("access_token", accessToken);
-                    resultIntent.putExtra("user_id", id);
-                    resultIntent.putExtra("username", username);
-                    resultIntent.putExtra("discriminator", discriminator);
-                    resultIntent.putExtra("avatar", avatar);
-                    
-                    Log.d(TAG, "Setting result OK with user data for: " + username);
-                    
-                    runOnUiThread(() -> {
-                        setResult(RESULT_OK, resultIntent);
-                        Log.d(TAG, "Activity result set, finishing activity");
-                        finish();
-                    });
-                    
-                } else {
-                    String errorResponse = readErrorResponse(conn);
-                    Log.e(TAG, "Failed to fetch user info with code " + responseCode + ": " + errorResponse);
-                    runOnUiThread(() -> {
-                        setResult(RESULT_CANCELED, new Intent().putExtra("error", 
-                            "Failed to fetch user information (HTTP " + responseCode + ")"));
-                        finish();
-                    });
+                @Override
+                public void onOpen(WebSocket webSocket, Response response) {
+                    Log.d(TAG, "Gateway WebSocket opened for token validation");
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "Error fetching user info", e);
-                runOnUiThread(() -> {
-                    setResult(RESULT_CANCELED, new Intent().putExtra("error", 
-                        "Error fetching user information: " + e.getMessage()));
-                    finish();
-                });
-            }
-        }).start();
-    }
-    
-    private String readResponse(java.net.HttpURLConnection conn) throws Exception {
-        try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"))) {
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                response.append(line);
-            }
-            return response.toString();
-        }
-    }
-    
-    private String readErrorResponse(java.net.HttpURLConnection conn) throws Exception {
-        try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                new java.io.InputStreamReader(
-                    conn.getErrorStream() != null ? conn.getErrorStream() : conn.getInputStream(), "UTF-8"))) {
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                response.append(line);
-            }
-            return response.toString();
+                
+                @Override
+                public void onMessage(WebSocket webSocket, String text) {
+                    try {
+                        JSONObject json = new JSONObject(text);
+                        int op = json.getInt("op");
+                        
+                        switch (op) {
+                            case 10: // Hello
+                                if (!identificationSent) {
+                                    sendIdentify(webSocket, token);
+                                    identificationSent = true;
+                                }
+                                break;
+                            case 0: // Dispatch
+                                String eventType = json.getString("t");
+                                if ("READY".equals(eventType)) {
+                                    JSONObject data = json.getJSONObject("d");
+                                    JSONObject user = data.getJSONObject("user");
+                                    
+                                    String userId = user.getString("id");
+                                    String username = user.getString("username");
+                                    String discriminator = user.optString("discriminator", "0");
+                                    String avatarHash = user.optString("avatar", "");
+                                    
+                                    String avatarUrl;
+                                    if (avatarHash.isEmpty()) {
+                                        int defaultAvatar = Integer.parseInt(discriminator) % 5;
+                                        avatarUrl = "https://cdn.discordapp.com/embed/avatars/" + defaultAvatar + ".png";
+                                    } else {
+                                        avatarUrl = "https://cdn.discordapp.com/avatars/" + userId + "/" + avatarHash + ".png";
+                                    }
+                                    
+                                    Log.d(TAG, "Token validation successful for user: " + username);
+                                    
+                                    mainHandler.post(() -> 
+                                        finishWithSuccess(token, userId, username, discriminator, avatarUrl)
+                                    );
+                                    
+                                    webSocket.close(1000, "Validation complete");
+                                }
+                                break;
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error processing gateway message", e);
+                        mainHandler.post(() -> finishWithError("Token validation failed"));
+                        webSocket.close(1000, "Error");
+                    }
+                }
+                
+                @Override
+                public void onFailure(WebSocket webSocket, Throwable t, Response response) {
+                    Log.e(TAG, "Gateway WebSocket failed during validation", t);
+                    mainHandler.post(() -> finishWithError("Failed to validate token"));
+                }
+            });
+            
+            client.dispatcher().executorService().shutdown();
+            
         } catch (Exception e) {
-            return "Unable to read error response: " + e.getMessage();
+            Log.e(TAG, "Error validating token", e);
+            mainHandler.post(() -> finishWithError("Error validating token: " + e.getMessage()));
         }
+    }
+    
+    private void sendIdentify(WebSocket webSocket, String token) {
+        try {
+            JSONObject properties = new JSONObject();
+            properties.put("os", "Android");
+            properties.put("browser", "XeloClient");
+            properties.put("device", "XeloClient");
+            
+            JSONObject data = new JSONObject();
+            data.put("token", token);
+            data.put("intents", 0);
+            data.put("properties", properties);
+            
+            JSONObject payload = new JSONObject();
+            payload.put("op", 2);
+            payload.put("d", data);
+            
+            webSocket.send(payload.toString());
+            Log.d(TAG, "Identify payload sent for token validation");
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending identify payload", e);
+        }
+    }
+    
+    private void finishWithSuccess(String token, String userId, String username, String discriminator, String avatarUrl) {
+        Intent resultIntent = new Intent();
+        resultIntent.putExtra("access_token", token);
+        resultIntent.putExtra("user_id", userId);
+        resultIntent.putExtra("username", username);
+        resultIntent.putExtra("discriminator", discriminator);
+        resultIntent.putExtra("avatar", avatarUrl);
+        
+        Log.d(TAG, "Setting result OK with user data for: " + username);
+        setResult(RESULT_OK, resultIntent);
+        finish();
+    }
+    
+    private void finishWithError(String error) {
+        Intent errorIntent = new Intent();
+        errorIntent.putExtra("error", error);
+        Log.d(TAG, "Setting result CANCELED with error: " + error);
+        setResult(RESULT_CANCELED, errorIntent);
+        finish();
     }
     
     @Override
@@ -346,7 +380,15 @@ public class DiscordLoginActivity extends AppCompatActivity {
     
     @Override
     public void onBackPressed() {
-        setResult(RESULT_CANCELED, new Intent().putExtra("error", "Login cancelled by user"));
+        finishWithError("Login cancelled by user");
         super.onBackPressed();
+    }
+    
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (executor != null && !executor.isShutdown()) {
+            executor.shutdown();
+        }
     }
 }
