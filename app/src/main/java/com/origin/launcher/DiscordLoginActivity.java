@@ -141,7 +141,7 @@ public class DiscordLoginActivity extends AppCompatActivity {
             
             @Override
             public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url, favicon);
+                super.onPageFinished(view, url);
                 Log.d(TAG, "onPageFinished: " + url);
                 progressBar.setVisibility(View.GONE);
                 
