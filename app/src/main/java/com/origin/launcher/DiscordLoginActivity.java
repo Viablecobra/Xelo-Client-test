@@ -85,7 +85,7 @@ public class DiscordLoginActivity extends AppCompatActivity {
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
             settings.setDatabaseEnabled(true);
-            settings.setAppCacheEnabled(true);
+            // Removed deprecated setAppCacheEnabled method
             settings.setLoadWithOverviewMode(true);
             settings.setUseWideViewPort(true);
             settings.setSupportZoom(true);
