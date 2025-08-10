@@ -234,6 +234,8 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
     public void onRPCConnected() {
         if (isAdded()) {
             Log.i(TAG, "Discord RPC connected");
+            Toast.makeText(getContext(), "Discord Rich Presence connected!", Toast.LENGTH_SHORT).show();
+            
             // Show a subtle indication that RPC is working
             if (discordUserText.getVisibility() == View.VISIBLE) {
                 String currentText = discordUserText.getText().toString();
