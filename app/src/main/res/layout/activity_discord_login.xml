@@ -48,6 +48,6 @@
         android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
         android:text="Back"
-        app:icon="@drawable/ic_arrow_back" />
+        app:icon="@android:drawable/ic_menu_revert" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
