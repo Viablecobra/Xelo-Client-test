@@ -238,7 +238,7 @@ public class DiscordManager {
         
         try {
             String accessToken = null;
-            String error = null;
+            String errorParam = null;
             
             // Handle both fragment (#) and query (?) parameters
             if (callbackUrl.contains("#access_token=")) {
@@ -253,7 +253,7 @@ public class DiscordManager {
                         if ("access_token".equals(key)) {
                             accessToken = value;
                         } else if ("error".equals(key)) {
-                            error = value;
+                            errorParam = value;
                         }
                     }
                 }
@@ -261,24 +261,28 @@ public class DiscordManager {
                 // Fallback to query parameters
                 Uri uri = Uri.parse(callbackUrl);
                 accessToken = uri.getQueryParameter("access_token");
-                error = uri.getQueryParameter("error");
+                errorParam = uri.getQueryParameter("error");
             }
             
-            if (error != null) {
-                Log.e(TAG, "Discord OAuth error: " + error);
+            // Make final variables for lambda usage
+            final String finalError = errorParam;
+            final String finalAccessToken = accessToken;
+            
+            if (finalError != null) {
+                Log.e(TAG, "Discord OAuth error: " + finalError);
                 mainHandler.post(() -> {
                     if (callback != null) {
-                        callback.onLoginError("Discord authorization failed: " + error);
+                        callback.onLoginError("Discord authorization failed: " + finalError);
                     }
                 });
                 return;
             }
             
-            if (accessToken != null && !accessToken.isEmpty()) {
+            if (finalAccessToken != null && !finalAccessToken.isEmpty()) {
                 Log.d(TAG, "Access token received directly");
                 // Save token and fetch user info
-                prefs.edit().putString(KEY_ACCESS_TOKEN, accessToken).apply();
-                fetchUserInfo(accessToken);
+                prefs.edit().putString(KEY_ACCESS_TOKEN, finalAccessToken).apply();
+                fetchUserInfo(finalAccessToken);
             } else {
                 Log.e(TAG, "No access token received in callback");
                 mainHandler.post(() -> {
