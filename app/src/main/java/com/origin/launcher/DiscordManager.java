@@ -3,29 +3,15 @@ package com.origin.launcher;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.net.Uri;
 import android.util.Log;
 import android.app.Activity;
-import org.json.JSONObject;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import android.os.Handler;
 import android.os.Looper;
-import java.net.URLDecoder;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class DiscordManager {
     private static final String TAG = "DiscordManager";
-    private static final String CLIENT_ID = "1403634750559752296"; // Corrected Discord Application ID
-    private static final String REDIRECT_URI = "https://xelo-client.github.io/discord-callback.html"; // No trailing slash - cleaner approach
-    private static final String SCOPE = "identify rpc";
-    private static final String DISCORD_API_BASE = "https://discord.com/api/v10";
     
     private static final String PREFS_NAME = "discord_prefs";
     private static final String KEY_ACCESS_TOKEN = "access_token";
@@ -43,8 +29,6 @@ public class DiscordManager {
     
     // RPC state
     private boolean rpcConnected = false;
-    private String currentActivity = "";
-    private String currentDetails = "";
     
     public interface DiscordLoginCallback {
         void onLoginSuccess(DiscordUser user);
@@ -147,7 +131,7 @@ public class DiscordManager {
         Activity activity = (Activity) context;
         
         try {
-            // Start the dedicated Discord login activity
+            // Start the simplified Discord login activity
             Intent intent = new Intent(activity, DiscordLoginActivity.class);
             Log.d(TAG, "Starting DiscordLoginActivity with intent: " + intent);
             activity.startActivityForResult(intent, 1001); // Request code for Discord login
@@ -220,8 +204,6 @@ public class DiscordManager {
         }
     }
     
-
-    
     public void startRPC() {
         if (!isLoggedIn()) {
             Log.w(TAG, "Cannot start RPC: not logged in");
@@ -243,9 +225,6 @@ public class DiscordManager {
             return;
         }
         
-        currentActivity = activity != null ? activity : "";
-        currentDetails = details != null ? details : "";
-        
         Log.d(TAG, "Updating Discord presence: " + activity + " - " + details);
         discordRPC.updatePresence(activity, details);
     }
@@ -253,6 +232,13 @@ public class DiscordManager {
     public void logout() {
         // Stop RPC first
         stopRPC();
+        
+        // Clear WebView data (similar to your friend's approach)
+        try {
+            clearDiscordWebViewData();
+        } catch (Exception e) {
+            Log.w(TAG, "Error clearing WebView data: " + e.getMessage());
+        }
         
         // Clear all stored data
         prefs.edit().clear().apply();
@@ -265,7 +251,33 @@ public class DiscordManager {
         });
     }
     
-
+    private void clearDiscordWebViewData() {
+        try {
+            // Clear WebView storage (similar to your friend's logout method)
+            java.io.File webViewDir = new java.io.File(context.getFilesDir().getParentFile(), "app_webview");
+            java.io.File cacheDir = new java.io.File(context.getFilesDir().getParentFile(), "cache");
+            java.io.File sharedPrefsDir = new java.io.File(context.getFilesDir().getParentFile(), "shared_prefs");
+            
+            deleteRecursively(webViewDir);
+            deleteRecursively(cacheDir);
+            deleteRecursively(sharedPrefsDir);
+            
+        } catch (Exception e) {
+            Log.w(TAG, "Error clearing WebView data", e);
+        }
+    }
+    
+    private boolean deleteRecursively(java.io.File dir) {
+        if (dir != null && dir.isDirectory()) {
+            java.io.File[] children = dir.listFiles();
+            if (children != null) {
+                for (java.io.File child : children) {
+                    deleteRecursively(child);
+                }
+            }
+        }
+        return dir != null && dir.delete();
+    }
     
     public void destroy() {
         stopRPC();
@@ -277,7 +289,7 @@ public class DiscordManager {
         if (executor != null && !executor.isShutdown()) {
             executor.shutdown();
             try {
-                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                if (!executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
                     executor.shutdownNow();
                 }
             } catch (InterruptedException e) {
@@ -289,5 +301,10 @@ public class DiscordManager {
     
     public DiscordRPC getDiscordRPC() {
         return discordRPC;
+    }
+    
+    // Helper method to get token (similar to your friend's approach)
+    public String getStoredToken() {
+        return prefs.getString(KEY_ACCESS_TOKEN, null);
     }
 }
