@@ -7,35 +7,25 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MainActivity extends AppCompatActivity {
 
-    private DiscordManager discordManager;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Initialize Discord Manager
-        discordManager = new DiscordManager(this);
-        
-        // Update Discord presence if logged in
-        if (discordManager.isLoggedIn()) {
-            discordManager.updatePresence("Using Xelo Client", "Browsing home screen");
-        }
-
         BottomNavigationView bottomNavigationView = findViewById(R.id.bottom_navigation);
         bottomNavigationView.setOnItemSelectedListener(item -> {
             Fragment selectedFragment = null;
-            String presenceDetails = "";
+            String presenceActivity = "";
             
             if (item.getItemId() == R.id.navigation_home) {
                 selectedFragment = new HomeFragment();
-                presenceDetails = "Browsing home screen";
+                presenceActivity = "In Home";
             } else if (item.getItemId() == R.id.navigation_dashboard) {
                 selectedFragment = new DashboardFragment();
-                presenceDetails = "Viewing dashboard";
+                presenceActivity = "In Dashboard";
             } else if (item.getItemId() == R.id.navigation_settings) {
                 selectedFragment = new SettingsFragment();
-                presenceDetails = "Configuring settings";
+                presenceActivity = "In Settings";
             }
 
             if (selectedFragment != null) {
@@ -43,10 +33,8 @@ public class MainActivity extends AppCompatActivity {
                     .replace(R.id.fragment_container, selectedFragment)
                     .commit();
                 
-                // Update Discord presence if logged in
-                if (discordManager.isLoggedIn()) {
-                    discordManager.updatePresence("Using Xelo Client", presenceDetails);
-                }
+                // Update Discord presence with custom text
+                DiscordRPCHelper.getInstance().updatePresence(presenceActivity, "Using the best MCPE Client");
                 
                 return true;
             }
@@ -65,26 +53,20 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         // Update presence when app comes to foreground
-        if (discordManager != null && discordManager.isLoggedIn()) {
-            discordManager.updatePresence("Using Xelo Client", "Active in launcher");
-        }
+        DiscordRPCHelper.getInstance().updatePresence("Using Xelo Client", "Using the best MCPE Client");
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        // Update presence when app goes to background
-        if (discordManager != null && discordManager.isLoggedIn()) {
-            discordManager.updatePresence("Xelo Client", "Running in background");
-        }
+        // Update presence when app goes to background  
+        DiscordRPCHelper.getInstance().updatePresence("Xelo Client", "Using the best MCPE Client");
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Clean up Discord manager
-        if (discordManager != null) {
-            discordManager.destroy();
-        }
+        // Clean up RPC helper
+        DiscordRPCHelper.getInstance().cleanup();
     }
 }

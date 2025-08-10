@@ -1,251 +1,245 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background">
-
-<LinearLayout
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
+    android:background="@color/background_dark"
     android:padding="16dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Settings"
-        android:textSize="32sp"
-        android:textStyle="bold"
-        android:textColor="@color/onBackground"
-        android:layout_marginBottom="32dp"
-        android:fontFamily="sans-serif-light" />
-
-    <!-- Discord Integration Card -->
-    <com.google.android.material.card.MaterialCardView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="8dp"
-        app:cardBackgroundColor="@color/surface"
-        app:strokeWidth="1dp"
-        app:strokeColor="@color/outline">
+        android:orientation="vertical">
 
+        <!-- Discord Integration Section -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:background="@drawable/card_background"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Discord Integration"
-                android:textSize="20sp"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
                 android:textStyle="bold"
-                android:textColor="@color/onSurface"
-                android:layout_marginBottom="16dp" />
+                android:layout_marginBottom="12dp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginBottom="16dp">
+                android:layout_marginBottom="8dp">
 
                 <TextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Status: "
-                    android:textSize="14sp"
-                    android:textColor="@color/onSurface" />
+                    android:layout_weight="1"
+                    android:text="Status:"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
 
                 <TextView
                     android:id="@+id/discord_status_text"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Not connected"
+                    android:textColor="#F44336"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="RPC Status:"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/discord_rpc_status_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Disconnected"
+                    android:textColor="#F44336"
                     android:textSize="14sp"
                     android:textStyle="bold"
-                    android:textColor="#F44336" />
+                    android:visibility="gone" />
 
             </LinearLayout>
 
             <TextView
                 android:id="@+id/discord_user_text"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text=""
+                android:text="Logged in as: Username#0000"
+                android:textColor="@color/text_secondary"
                 android:textSize="14sp"
-                android:textColor="@color/onSurfaceVariant"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="12dp"
                 android:visibility="gone" />
 
-            <com.google.android.material.button.MaterialButton
+            <Button
                 android:id="@+id/discord_login_button"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Login with Discord"
-                android:textColor="@color/onPrimary"
-                app:backgroundTint="#5865F2"
-                app:cornerRadius="8dp"
-                app:icon="@drawable/ic_discord"
-                app:iconTint="@color/onPrimary"
-                app:iconGravity="textStart"
-                style="@style/Widget.Material3.Button.UnelevatedButton" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Connect your Discord account to enable Rich Presence and show your friends what you're playing!"
-                android:textSize="12sp"
-                android:textColor="@color/onSurfaceVariant"
-                android:layout_marginTop="12dp" />
+                android:background="@drawable/discord_button_background"
+                android:textColor="@color/text_primary"
+                android:textStyle="bold"
+                android:padding="12dp" />
 
         </LinearLayout>
 
-    </com.google.android.material.card.MaterialCardView>
-
-    <com.google.android.material.card.MaterialCardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="8dp"
-        app:cardBackgroundColor="@color/surface"
-        app:strokeWidth="1dp"
-        app:strokeColor="@color/outline">
-
+        <!-- Minecraft Package Configuration -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:background="@drawable/card_background"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Minecraft Configuration"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:textColor="@color/onSurface"
-                android:layout_marginBottom="24dp" />
-
-            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/textview3"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/mc_pkgname"
-                    android:textSize="16sp"
-                    android:textColor="@color/onSurface"
-                    android:layout_marginBottom="12dp" />
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:hint="Package name of Minecraft"
-                    app:boxCornerRadiusTopStart="12dp"
-                    app:boxCornerRadiusTopEnd="12dp"
-                    app:boxCornerRadiusBottomStart="12dp"
-                    app:boxCornerRadiusBottomEnd="12dp"
-                    app:boxBackgroundColor="@color/surfaceVariant"
-                    app:hintTextColor="@color/onSurfaceVariant"
-                    app:boxStrokeColor="@color/outline"
-                    app:boxStrokeWidth="1dp"
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/mc_pkgname"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="com.mojang.minecraftpe"
-                        android:inputType="text"
-                        android:textColor="@color/onSurface"
-                        android:textSize="16sp" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
-            </LinearLayout>
-
-        </LinearLayout>
-
-    </com.google.android.material.card.MaterialCardView>
-
-    <com.google.android.material.card.MaterialCardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="8dp"
-        app:cardBackgroundColor="@color/surface"
-        app:strokeWidth="1dp"
-        app:strokeColor="@color/outline">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="24dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="About"
-                android:textSize="20sp"
+                android:text="Minecraft Configuration"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
                 android:textStyle="bold"
-                android:textColor="@color/onSurface"
-                android:layout_marginBottom="24dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Xelo Client v1.3"
-                android:textSize="16sp"
-                android:textColor="@color/onSurface"
                 android:layout_marginBottom="12dp" />
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Minecraft Bedrock Edition Client"
+                android:text="Package Name:"
+                android:textColor="@color/text_secondary"
                 android:textSize="14sp"
-                android:textColor="@color/onSurfaceVariant" />
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/mc_pkgname"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="com.mojang.minecraftpe"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_hint"
+                android:background="@drawable/edittext_background"
+                android:padding="12dp"
+                android:textSize="14sp" />
 
         </LinearLayout>
 
-    </com.google.android.material.card.MaterialCardView>
-
-    <com.google.android.material.card.MaterialCardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="8dp"
-        app:cardBackgroundColor="@color/surface"
-        app:strokeWidth="1dp"
-        app:strokeColor="@color/outline">
-
+        <!-- Device Information -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:background="@drawable/card_background"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Recent Commits"
-                android:textSize="20sp"
+                android:text="Device Information"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
                 android:textStyle="bold"
-                android:textColor="@color/onSurface"
-                android:layout_marginBottom="24dp" />
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:id="@+id/device_model"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Model: Loading..."
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/android_version"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Android Version: Loading..."
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/build_number"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Build Number: Loading..."
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/device_manufacturer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Manufacturer: Loading..."
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/device_architecture"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Architecture: Loading..."
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/screen_resolution"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Screen Resolution: Loading..."
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/total_memory"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Total Memory: Loading..."
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
+        <!-- Recent Commits -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Recent Updates"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp" />
 
             <LinearLayout
                 android:id="@+id/commits_container"
@@ -253,220 +247,106 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <!-- Commits will be dynamically added here -->
                 <TextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Loading commits..."
+                    android:text="Loading recent commits..."
+                    android:textColor="@color/text_secondary"
                     android:textSize="14sp"
-                    android:textColor="@color/onSurfaceVariant"
-                    android:layout_gravity="center" />
+                    android:padding="16dp" />
 
             </LinearLayout>
 
         </LinearLayout>
 
-    </com.google.android.material.card.MaterialCardView>
-
-    <com.google.android.material.card.MaterialCardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="8dp"
-        app:cardBackgroundColor="@color/surface"
-        app:strokeWidth="1dp"
-        app:strokeColor="@color/outline">
-
+        <!-- Social Links -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:background="@drawable/card_background"
+            android:padding="16dp">
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Device Information"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:textColor="@color/onSurface"
-                android:layout_marginBottom="24dp" />
-
-            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/device_model"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Model: Loading..."
-                    android:textSize="14sp"
-                    android:textColor="@color/onSurface"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/android_version"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Android Version: Loading..."
-                    android:textSize="14sp"
-                    android:textColor="@color/onSurface"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/build_number"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Build Number: Loading..."
-                    android:textSize="14sp"
-                    android:textColor="@color/onSurface"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/device_manufacturer"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Manufacturer: Loading..."
-                    android:textSize="14sp"
-                    android:textColor="@color/onSurface"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/device_architecture"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Architecture: Loading..."
-                    android:textSize="14sp"
-                    android:textColor="@color/onSurface"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/screen_resolution"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Screen Resolution: Loading..."
-                    android:textSize="14sp"
-                    android:textColor="@color/onSurface"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/total_memory"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Total Memory: Loading..."
-                    android:textSize="14sp"
-                    android:textColor="@color/onSurface" />
-
-            </LinearLayout>
-
-        </LinearLayout>
-
-    </com.google.android.material.card.MaterialCardView>
-
-    <!-- Community Links Card -->
-    <com.google.android.material.card.MaterialCardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="8dp"
-        app:cardBackgroundColor="@color/surface"
-        app:strokeWidth="1dp"
-        app:strokeColor="@color/outline">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="24dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Community"
-                android:textSize="20sp"
+                android:text="Social Links"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
                 android:textStyle="bold"
-                android:textColor="@color/onSurface"
-                android:layout_marginBottom="24dp" />
+                android:layout_marginBottom="12dp" />
 
             <LinearLayout
+                android:id="@+id/github_button"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center"
-                android:weightSum="2">
+                android:background="@drawable/social_button_background"
+                android:padding="12dp"
+                android:layout_marginBottom="8dp"
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true">
 
-                <!-- GitHub Button -->
-                <LinearLayout
-                    android:id="@+id/github_button"
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_github"
+                    android:tint="@color/text_primary"
+                    android:layout_marginEnd="12dp" />
+
+                <TextView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:padding="16dp"
-                    android:layout_marginEnd="8dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:clickable="true"
-                    android:focusable="true">
+                    android:text="Visit GitHub Repository"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp" />
 
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_github"
-                        android:layout_marginBottom="8dp"
-                        android:contentDescription="GitHub" />
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_external_link"
+                    android:tint="@color/text_secondary" />
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="GitHub"
-                        android:textSize="12sp"
-                        android:textColor="@color/onSurface"
-                        android:gravity="center" />
+            </LinearLayout>
 
-                </LinearLayout>
+            <LinearLayout
+                android:id="@+id/discord_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:background="@drawable/social_button_background"
+                android:padding="12dp"
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true">
 
-                <!-- Discord Button -->
-                <LinearLayout
-                    android:id="@+id/discord_button"
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_discord"
+                    android:tint="#5865F2"
+                    android:layout_marginEnd="12dp" />
+
+                <TextView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:padding="16dp"
-                    android:layout_marginStart="8dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:clickable="true"
-                    android:focusable="true">
+                    android:text="Join Discord Server"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp" />
 
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_discord"
-                        android:layout_marginBottom="8dp"
-                        android:contentDescription="Discord" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Discord"
-                        android:textSize="12sp"
-                        android:textColor="@color/onSurface"
-                        android:gravity="center" />
-
-                </LinearLayout>
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_external_link"
+                    android:tint="@color/text_secondary" />
 
             </LinearLayout>
 
         </LinearLayout>
 
-    </com.google.android.material.card.MaterialCardView>
-
-</LinearLayout>
+    </LinearLayout>
 
 </ScrollView>

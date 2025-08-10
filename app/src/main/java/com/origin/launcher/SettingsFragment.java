@@ -48,7 +48,7 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
     private LinearLayout discordButton;
     
     // Discord components
-    private Button discordLoginButton;
+    private com.google.android.material.button.MaterialButton discordLoginButton;
     private TextView discordStatusText;
     private TextView discordUserText;
     private DiscordManager discordManager;
@@ -90,8 +90,11 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
         discordUserText = view.findViewById(R.id.discord_user_text);
         
         // Initialize Discord manager
-        discordManager = new DiscordManager(getContext());
+        discordManager = new DiscordManager(getActivity()); // Use getActivity() instead of getContext()
         discordManager.setCallback(this);
+        
+        // Initialize the global RPC helper
+        DiscordRPCHelper.getInstance().initialize(discordManager);
         
         // Initialize executor and handler
         executor = Executors.newSingleThreadExecutor();
@@ -118,6 +121,11 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
         // Update Discord UI
         updateDiscordUI();
         
+        // If already logged in, start RPC
+        if (discordManager.isLoggedIn()) {
+            discordManager.startRPC();
+        }
+        
         // Load device information
         loadDeviceInformation();
         
@@ -138,11 +146,17 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
                 // Show logout confirmation
                 new androidx.appcompat.app.AlertDialog.Builder(getContext())
                     .setTitle("Logout from Discord")
-                    .setMessage("Are you sure you want to logout from Discord?")
-                    .setPositiveButton("Logout", (dialog, which) -> discordManager.logout())
+                    .setMessage("Are you sure you want to logout from Discord? This will also disconnect Rich Presence.")
+                    .setPositiveButton("Logout", (dialog, which) -> {
+                        discordManager.logout();
+                        updateDiscordUI();
+                    })
                     .setNegativeButton("Cancel", null)
                     .show();
             } else {
+                // Disable button during login process
+                discordLoginButton.setEnabled(false);
+                discordLoginButton.setText("Connecting...");
                 discordManager.login();
             }
         });
@@ -156,11 +170,19 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
             discordUserText.setText("Logged in as: " + user.displayName);
             discordUserText.setVisibility(View.VISIBLE);
             discordLoginButton.setText("Logout");
+            discordLoginButton.setEnabled(true);
+            
+            // Set Discord brand color when logged in
+            discordLoginButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFF44336)); // Red for logout
         } else {
             discordStatusText.setText("Not connected");
             discordStatusText.setTextColor(0xFFF44336); // Red
             discordUserText.setVisibility(View.GONE);
             discordLoginButton.setText("Login with Discord");
+            discordLoginButton.setEnabled(true);
+            
+            // Set Discord brand color
+            discordLoginButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF5865F2)); // Discord blue
         }
     }
     
@@ -171,8 +193,7 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
             Toast.makeText(getContext(), "Successfully logged in as " + user.displayName, Toast.LENGTH_SHORT).show();
             updateDiscordUI();
             
-            // Update Rich Presence
-            discordManager.updatePresence("Using Xelo Client", "Browsing settings");
+            Log.i(TAG, "Discord login successful, updating presence");
         }
     }
     
@@ -181,6 +202,7 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
         if (isAdded()) {
             Toast.makeText(getContext(), "Discord login failed: " + error, Toast.LENGTH_LONG).show();
             updateDiscordUI();
+            Log.e(TAG, "Discord login error: " + error);
         }
     }
     
@@ -189,6 +211,38 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
         if (isAdded()) {
             Toast.makeText(getContext(), "Logged out from Discord", Toast.LENGTH_SHORT).show();
             updateDiscordUI();
+            Log.i(TAG, "Discord logout successful");
+        }
+    }
+    
+    @Override
+    public void onRPCConnected() {
+        if (isAdded()) {
+            Log.i(TAG, "Discord RPC connected");
+            // Show a subtle indication that RPC is working
+            if (discordUserText.getVisibility() == View.VISIBLE) {
+                String currentText = discordUserText.getText().toString();
+                if (!currentText.contains("Rich Presence")) {
+                    discordUserText.setText(currentText + " • Rich Presence Active");
+                }
+            }
+            
+            // Set initial presence when RPC connects
+            discordManager.updatePresence("Browsing Settings", "Configuring Xelo Client");
+        }
+    }
+    
+    @Override
+    public void onRPCDisconnected() {
+        if (isAdded()) {
+            Log.i(TAG, "Discord RPC disconnected");
+            // Remove RPC indication from user text
+            if (discordUserText.getVisibility() == View.VISIBLE) {
+                String currentText = discordUserText.getText().toString();
+                if (currentText.contains(" • Rich Presence Active")) {
+                    discordUserText.setText(currentText.replace(" • Rich Presence Active", ""));
+                }
+            }
         }
     }
     
@@ -412,9 +466,19 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
     }
     
     @Override
+    public void onResume() {
+        super.onResume();
+        // Update Discord RPC when fragment resumes
+        DiscordRPCHelper.getInstance().updateMenuPresence("Settings");
+    }
+    
+    @Override
     public void onPause() {
         super.onPause();
         savePackageName();
+        
+        // Update Discord RPC when leaving settings
+        DiscordRPCHelper.getInstance().updateIdlePresence();
     }
     
     @Override
@@ -426,5 +490,17 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
         if (discordManager != null) {
             discordManager.destroy();
         }
+    }
+    
+    // Helper method to update Discord presence from other activities
+    public void updateDiscordPresence(String activity, String details) {
+        if (discordManager != null && discordManager.isRPCConnected()) {
+            discordManager.updatePresence(activity, details);
+        }
+    }
+    
+    // Method to get the Discord manager instance for use in other fragments/activities
+    public DiscordManager getDiscordManager() {
+        return discordManager;
     }
 }
