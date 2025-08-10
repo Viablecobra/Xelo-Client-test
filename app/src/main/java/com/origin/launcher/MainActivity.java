@@ -1,11 +1,15 @@
 package com.origin.launcher;
 
+import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MainActivity extends AppCompatActivity {
+    private static final String TAG = "MainActivity";
+    private SettingsFragment settingsFragment;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -24,7 +28,11 @@ public class MainActivity extends AppCompatActivity {
                 selectedFragment = new DashboardFragment();
                 presenceActivity = "In Dashboard";
             } else if (item.getItemId() == R.id.navigation_settings) {
-                selectedFragment = new SettingsFragment();
+                // Keep reference to settings fragment for activity results
+                if (settingsFragment == null) {
+                    settingsFragment = new SettingsFragment();
+                }
+                selectedFragment = settingsFragment;
                 presenceActivity = "In Settings";
             }
 
@@ -46,6 +54,20 @@ public class MainActivity extends AppCompatActivity {
             getSupportFragmentManager().beginTransaction()
                 .replace(R.id.fragment_container, new HomeFragment())
                 .commit();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        Log.d(TAG, "MainActivity onActivityResult: requestCode=" + requestCode + 
+              ", resultCode=" + resultCode + ", data=" + (data != null ? "present" : "null"));
+        
+        // Forward the result to the settings fragment if it's a Discord login
+        if (requestCode == DiscordLoginActivity.DISCORD_LOGIN_REQUEST_CODE && settingsFragment != null) {
+            Log.d(TAG, "Forwarding Discord login result to SettingsFragment");
+            settingsFragment.onActivityResult(requestCode, resultCode, data);
         }
     }
 
