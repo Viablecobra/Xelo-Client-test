@@ -26,7 +26,7 @@ import android.os.Looper;
 public class DiscordManager {
     private static final String TAG = "DiscordManager";
     private static final String CLIENT_ID = "1403634750557752296"; // Your Discord Application ID
-    private static final String REDIRECT_URI = "https://xelo-client.github.io/discord-callback.html/";
+    private static final String REDIRECT_URI = "https://xelo-client.github.io/discord-callback.html";
     private static final String SCOPE = "identify rpc";
     private static final String DISCORD_API_BASE = "https://discord.com/api/v10";
     
@@ -71,9 +71,9 @@ public class DiscordManager {
         public DiscordUser(String id, String username, String discriminator, String avatar) {
             this.id = id;
             this.username = username;
-            this.discriminator = discriminator;
-            this.avatar = avatar;
-            this.displayName = username + (discriminator.equals("0") ? "" : "#" + discriminator);
+            this.discriminator = discriminator != null ? discriminator : "0";
+            this.avatar = avatar != null ? avatar : "";
+            this.displayName = username + (this.discriminator.equals("0") ? "" : "#" + this.discriminator);
         }
     }
     
@@ -112,199 +112,206 @@ public class DiscordManager {
         if (!(context instanceof Activity)) {
             Log.e(TAG, "Context is not an Activity, cannot show login dialog");
             if (callback != null) {
-                callback.onLoginError("Invalid context for login");
+                mainHandler.post(() -> callback.onLoginError("Invalid context for login"));
             }
             return;
         }
         
         Activity activity = (Activity) context;
         
+        // Ensure we're on the main thread
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post(this::login);
+            return;
+        }
+        
         String authUrl = "https://discord.com/oauth2/authorize?" +
             "client_id=" + CLIENT_ID +
             "&redirect_uri=" + Uri.encode(REDIRECT_URI) +
-            "&response_type=code" +
+            "&response_type=token" + // Changed from "code" to "token"
             "&scope=" + Uri.encode(SCOPE) +
             "&prompt=consent";
         
         Log.d(TAG, "Starting Discord login with URL: " + authUrl);
         
-        // Create WebView with proper settings
-        WebView webView = new WebView(activity);
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setLoadWithOverviewMode(true);
-        settings.setUseWideViewPort(true);
-        settings.setSupportZoom(false);
-        settings.setBuiltInZoomControls(false);
-        settings.setDisplayZoomControls(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " XeloClient/1.0");
-        
-        // Clear cache and cookies for fresh login
-        webView.clearCache(true);
-        webView.clearHistory();
-        android.webkit.CookieManager.getInstance().removeAllCookies(null);
-        
-        // Create dialog with proper styling
-        AlertDialog.Builder builder = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog);
-        builder.setTitle("Login to Discord");
-        builder.setView(webView);
-        builder.setNegativeButton("Cancel", (dialog, which) -> {
-            Log.d(TAG, "Discord login cancelled by user");
+        try {
+            // Create WebView with proper settings
+            WebView webView = new WebView(activity);
+            WebSettings settings = webView.getSettings();
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            settings.setLoadWithOverviewMode(true);
+            settings.setUseWideViewPort(true);
+            settings.setSupportZoom(false);
+            settings.setBuiltInZoomControls(false);
+            settings.setDisplayZoomControls(false);
+            settings.setUserAgentString(settings.getUserAgentString() + " XeloClient/1.0");
+            
+            // Clear cache and cookies for fresh login
+            webView.clearCache(true);
+            webView.clearHistory();
+            android.webkit.CookieManager.getInstance().removeAllCookies(null);
+            
+            // Create dialog with proper styling
+            AlertDialog.Builder builder = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog);
+            builder.setTitle("Login to Discord");
+            builder.setView(webView);
+            builder.setNegativeButton("Cancel", (dialog, which) -> {
+                Log.d(TAG, "Discord login cancelled by user");
+                if (callback != null) {
+                    callback.onLoginError("Login cancelled by user");
+                }
+            });
+            
+            currentDialog = builder.create();
+            
+            webView.setWebViewClient(new WebViewClient() {
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                    Log.d(TAG, "WebView loading URL: " + url);
+                    
+                    if (url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) {
+                        Log.d(TAG, "Redirect URI detected: " + url);
+                        mainHandler.post(() -> {
+                            if (currentDialog != null && currentDialog.isShowing()) {
+                                currentDialog.dismiss();
+                            }
+                        });
+                        handleCallback(url);
+                        return true;
+                    }
+                    return false;
+                }
+                
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    super.onPageFinished(view, url);
+                    Log.d(TAG, "Page finished loading: " + url);
+                    
+                    if (url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) {
+                        mainHandler.post(() -> {
+                            if (currentDialog != null && currentDialog.isShowing()) {
+                                currentDialog.dismiss();
+                            }
+                        });
+                        handleCallback(url);
+                    }
+                }
+                
+                @Override
+                public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                    super.onReceivedError(view, errorCode, description, failingUrl);
+                    Log.e(TAG, "WebView error: " + description + " for URL: " + failingUrl);
+                    
+                    // Notify callback of error
+                    mainHandler.post(() -> {
+                        if (callback != null) {
+                            callback.onLoginError("WebView error: " + description);
+                        }
+                    });
+                }
+            });
+            
+            // Show dialog and load URL
+            currentDialog.show();
+            
+            // Set dialog to full width
+            if (currentDialog.getWindow() != null) {
+                currentDialog.getWindow().setLayout(
+                    (int) (activity.getResources().getDisplayMetrics().widthPixels * 0.95),
+                    (int) (activity.getResources().getDisplayMetrics().heightPixels * 0.8)
+                );
+            }
+            
+            webView.loadUrl(authUrl);
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error creating login dialog", e);
             if (callback != null) {
-                callback.onLoginError("Login cancelled by user");
+                callback.onLoginError("Failed to create login dialog: " + e.getMessage());
             }
-        });
-        
-        currentDialog = builder.create();
-        
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                Log.d(TAG, "WebView loading URL: " + url);
-                
-                if (url.startsWith(REDIRECT_URI)) {
-                    Log.d(TAG, "Redirect URI detected: " + url);
-                    if (currentDialog != null && currentDialog.isShowing()) {
-                        currentDialog.dismiss();
-                    }
-                    handleCallback(url);
-                    return true;
-                }
-                return false;
-            }
-            
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                Log.d(TAG, "Page finished loading: " + url);
-                
-                if (url.startsWith(REDIRECT_URI)) {
-                    if (currentDialog != null && currentDialog.isShowing()) {
-                        currentDialog.dismiss();
-                    }
-                    handleCallback(url);
-                }
-            }
-            
-            @Override
-            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                super.onReceivedError(view, errorCode, description, failingUrl);
-                Log.e(TAG, "WebView error: " + description + " for URL: " + failingUrl);
-            }
-        });
-        
-        // Show dialog and load URL
-        currentDialog.show();
-        
-        // Set dialog to full width
-        if (currentDialog.getWindow() != null) {
-            currentDialog.getWindow().setLayout(
-                (int) (activity.getResources().getDisplayMetrics().widthPixels * 0.95),
-                (int) (activity.getResources().getDisplayMetrics().heightPixels * 0.8)
-            );
         }
-        
-        webView.loadUrl(authUrl);
     }
     
     private void handleCallback(String callbackUrl) {
         Log.d(TAG, "Handling callback URL: " + callbackUrl);
         
-        Uri uri = Uri.parse(callbackUrl);
-        String code = uri.getQueryParameter("code");
-        String error = uri.getQueryParameter("error");
-        
-        if (error != null) {
-            Log.e(TAG, "Discord OAuth error: " + error);
-            if (callback != null) {
-                callback.onLoginError("Discord authorization failed: " + error);
-            }
-            return;
-        }
-        
-        if (code != null) {
-            Log.d(TAG, "Authorization code received, exchanging for token");
-            exchangeCodeForToken(code);
-        } else {
-            Log.e(TAG, "No authorization code received in callback");
-            if (callback != null) {
-                callback.onLoginError("No authorization code received");
-            }
-        }
-    }
-    
-    private void exchangeCodeForToken(String code) {
-        executor.execute(() -> {
-            try {
-                Log.d(TAG, "Exchanging code for access token");
-                
-                // Prepare token exchange data
-                String tokenData = "client_id=" + CLIENT_ID +
-                    "&redirect_uri=" + Uri.encode(REDIRECT_URI) +
-                    "&grant_type=authorization_code" +
-                    "&code=" + code;
-                
-                URL url = new URL("https://discord.com/api/oauth2/token");
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-                conn.setRequestProperty("User-Agent", "XeloClient/1.0");
-                conn.setDoOutput(true);
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(10000);
-                
-                // Write request data
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.write(tokenData.getBytes("UTF-8"));
-                    os.flush();
-                }
-                
-                int responseCode = conn.getResponseCode();
-                Log.d(TAG, "Token exchange response code: " + responseCode);
-                
-                if (responseCode == 200) {
-                    String response = readResponse(conn);
-                    Log.d(TAG, "Token exchange successful");
-                    
-                    JSONObject tokenJson = new JSONObject(response);
-                    String accessToken = tokenJson.getString("access_token");
-                    
-                    // Save token and fetch user info
-                    prefs.edit().putString(KEY_ACCESS_TOKEN, accessToken).apply();
-                    fetchUserInfo(accessToken);
-                } else {
-                    String errorResponse = readErrorResponse(conn);
-                    Log.e(TAG, "Token exchange failed: " + errorResponse);
-                    mainHandler.post(() -> {
-                        if (callback != null) {
-                            callback.onLoginError("Failed to exchange authorization code: " + errorResponse);
+        try {
+            String accessToken = null;
+            String error = null;
+            
+            // Handle both fragment (#) and query (?) parameters
+            if (callbackUrl.contains("#access_token=")) {
+                // Implicit flow - token in URL fragment
+                String fragment = callbackUrl.substring(callbackUrl.indexOf("#") + 1);
+                String[] params = fragment.split("&");
+                for (String param : params) {
+                    String[] keyValue = param.split("=");
+                    if (keyValue.length == 2) {
+                        String key = keyValue[0];
+                        String value = Uri.decode(keyValue[1]);
+                        if ("access_token".equals(key)) {
+                            accessToken = value;
+                        } else if ("error".equals(key)) {
+                            error = value;
                         }
-                    });
+                    }
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "Error exchanging code for token", e);
+            } else {
+                // Fallback to query parameters
+                Uri uri = Uri.parse(callbackUrl);
+                accessToken = uri.getQueryParameter("access_token");
+                error = uri.getQueryParameter("error");
+            }
+            
+            if (error != null) {
+                Log.e(TAG, "Discord OAuth error: " + error);
                 mainHandler.post(() -> {
                     if (callback != null) {
-                        callback.onLoginError("Network error during login: " + e.getMessage());
+                        callback.onLoginError("Discord authorization failed: " + error);
+                    }
+                });
+                return;
+            }
+            
+            if (accessToken != null && !accessToken.isEmpty()) {
+                Log.d(TAG, "Access token received directly");
+                // Save token and fetch user info
+                prefs.edit().putString(KEY_ACCESS_TOKEN, accessToken).apply();
+                fetchUserInfo(accessToken);
+            } else {
+                Log.e(TAG, "No access token received in callback");
+                mainHandler.post(() -> {
+                    if (callback != null) {
+                        callback.onLoginError("No access token received");
                     }
                 });
             }
-        });
+        } catch (Exception e) {
+            Log.e(TAG, "Error handling callback", e);
+            mainHandler.post(() -> {
+                if (callback != null) {
+                    callback.onLoginError("Error processing callback: " + e.getMessage());
+                }
+            });
+        }
     }
+    
+    // Remove the exchangeCodeForToken method as it's not needed for implicit flow
     
     private void fetchUserInfo(String accessToken) {
         executor.execute(() -> {
+            HttpURLConnection conn = null;
             try {
                 Log.d(TAG, "Fetching user information");
                 
                 URL url = new URL(DISCORD_API_BASE + "/users/@me");
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("GET");
                 conn.setRequestProperty("Authorization", "Bearer " + accessToken);
                 conn.setRequestProperty("User-Agent", "XeloClient/1.0");
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(10000);
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(15000);
                 
                 int responseCode = conn.getResponseCode();
                 Log.d(TAG, "User info response code: " + responseCode);
@@ -339,12 +346,21 @@ public class DiscordManager {
                     });
                     
                     Log.i(TAG, "Discord login successful for user: " + user.displayName);
-                } else {
-                    String errorResponse = readErrorResponse(conn);
-                    Log.e(TAG, "Failed to fetch user info: " + errorResponse);
+                } else if (responseCode == 401) {
+                    Log.e(TAG, "Invalid access token");
+                    // Clear invalid token
+                    prefs.edit().remove(KEY_ACCESS_TOKEN).apply();
                     mainHandler.post(() -> {
                         if (callback != null) {
-                            callback.onLoginError("Failed to fetch user information: " + errorResponse);
+                            callback.onLoginError("Authentication failed - please try again");
+                        }
+                    });
+                } else {
+                    String errorResponse = readErrorResponse(conn);
+                    Log.e(TAG, "Failed to fetch user info with code " + responseCode + ": " + errorResponse);
+                    mainHandler.post(() -> {
+                        if (callback != null) {
+                            callback.onLoginError("Failed to fetch user information (HTTP " + responseCode + ")");
                         }
                     });
                 }
@@ -355,6 +371,10 @@ public class DiscordManager {
                         callback.onLoginError("Error fetching user information: " + e.getMessage());
                     }
                 });
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
+                }
             }
         });
     }
@@ -407,9 +427,11 @@ public class DiscordManager {
         rpcConnected = false;
         Log.d(TAG, "Discord RPC disconnected");
         
-        if (callback != null) {
-            callback.onRPCDisconnected();
-        }
+        mainHandler.post(() -> {
+            if (callback != null) {
+                callback.onRPCDisconnected();
+            }
+        });
     }
     
     public void updatePresence(String activity, String details) {
@@ -454,44 +476,53 @@ public class DiscordManager {
         prefs.edit().clear().apply();
         
         // Cancel any ongoing dialogs
-        if (currentDialog != null && currentDialog.isShowing()) {
-            currentDialog.dismiss();
-        }
+        mainHandler.post(() -> {
+            if (currentDialog != null && currentDialog.isShowing()) {
+                currentDialog.dismiss();
+            }
+        });
         
         Log.i(TAG, "Discord logout successful");
-        if (callback != null) {
-            callback.onLogout();
-        }
+        mainHandler.post(() -> {
+            if (callback != null) {
+                callback.onLogout();
+            }
+        });
     }
     
     private String readResponse(HttpURLConnection conn) throws Exception {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
-        StringBuilder response = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            response.append(line);
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"))) {
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                response.append(line);
+            }
+            return response.toString();
         }
-        reader.close();
-        return response.toString();
     }
     
     private String readErrorResponse(HttpURLConnection conn) throws Exception {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getErrorStream(), "UTF-8"));
-        StringBuilder response = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            response.append(line);
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                conn.getErrorStream() != null ? conn.getErrorStream() : conn.getInputStream(), "UTF-8"))) {
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                response.append(line);
+            }
+            return response.toString();
+        } catch (Exception e) {
+            return "Unable to read error response: " + e.getMessage();
         }
-        reader.close();
-        return response.toString();
     }
     
     public void destroy() {
         stopRPC();
         
-        if (currentDialog != null && currentDialog.isShowing()) {
-            currentDialog.dismiss();
-        }
+        mainHandler.post(() -> {
+            if (currentDialog != null && currentDialog.isShowing()) {
+                currentDialog.dismiss();
+            }
+        });
         
         if (executor != null && !executor.isShutdown()) {
             executor.shutdown();
