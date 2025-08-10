@@ -205,19 +205,28 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
     @Override
     public void onLoginSuccess(DiscordManager.DiscordUser user) {
         if (isAdded()) {
+            Log.i(TAG, "Discord login successful for user: " + user.displayName);
             Toast.makeText(getContext(), "Successfully logged in as " + user.displayName, Toast.LENGTH_SHORT).show();
+            
+            // Update UI immediately
             updateDiscordUI();
             
             Log.i(TAG, "Discord login successful, updating presence");
+        } else {
+            Log.w(TAG, "Fragment not attached, cannot update UI");
         }
     }
     
     @Override
     public void onLoginError(String error) {
         if (isAdded()) {
-            Toast.makeText(getContext(), "Discord login failed: " + error, Toast.LENGTH_LONG).show();
-            updateDiscordUI();
             Log.e(TAG, "Discord login error: " + error);
+            Toast.makeText(getContext(), "Discord login failed: " + error, Toast.LENGTH_LONG).show();
+            
+            // Update UI immediately
+            updateDiscordUI();
+        } else {
+            Log.w(TAG, "Fragment not attached, cannot update UI");
         }
     }
     

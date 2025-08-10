@@ -26,6 +26,7 @@ public class DiscordLoginActivity extends AppCompatActivity {
     private WebView webView;
     private ProgressBar progressBar;
     private DiscordLoginCallback callback;
+    private boolean callbackHandled = false;
     
     public interface DiscordLoginCallback {
         void onLoginSuccess(String accessToken, String userId, String username, String discriminator, String avatar);
@@ -36,6 +37,9 @@ public class DiscordLoginActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_discord_login);
+        
+        // Reset callback flag
+        callbackHandled = false;
         
         // Setup toolbar
         Toolbar toolbar = findViewById(R.id.toolbar);
@@ -102,8 +106,9 @@ public class DiscordLoginActivity extends AppCompatActivity {
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 Log.d(TAG, "WebView shouldOverrideUrlLoading: " + url);
                 
-                if (url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) {
+                if ((url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) && !callbackHandled) {
                     Log.d(TAG, "Redirect detected, handling callback: " + url);
+                    callbackHandled = true;
                     handleCallback(url);
                     return true;
                 }
@@ -117,8 +122,9 @@ public class DiscordLoginActivity extends AppCompatActivity {
                 progressBar.setVisibility(View.GONE);
                 Log.d(TAG, "Page finished loading: " + url);
                 
-                if (url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) {
+                if ((url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) && !callbackHandled) {
                     Log.d(TAG, "Redirect detected in onPageFinished: " + url);
+                    callbackHandled = true;
                     handleCallback(url);
                 }
             }
@@ -129,8 +135,9 @@ public class DiscordLoginActivity extends AppCompatActivity {
                 progressBar.setVisibility(View.VISIBLE);
                 Log.d(TAG, "Page started loading: " + url);
                 
-                if (url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) {
+                if ((url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) && !callbackHandled) {
                     Log.d(TAG, "Early redirect detection: " + url);
+                    callbackHandled = true;
                     handleCallback(url);
                 }
             }
@@ -168,6 +175,12 @@ public class DiscordLoginActivity extends AppCompatActivity {
     
     private void handleCallback(String callbackUrl) {
         Log.d(TAG, "Handling callback URL: " + callbackUrl);
+        
+        // Prevent multiple callback handling
+        if (callbackHandled && !callbackUrl.contains("#access_token=")) {
+            Log.d(TAG, "Callback already handled, ignoring");
+            return;
+        }
         
         try {
             String accessToken = null;
