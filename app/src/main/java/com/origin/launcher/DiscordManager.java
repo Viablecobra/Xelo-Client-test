@@ -133,17 +133,41 @@ public class DiscordManager {
         Log.d(TAG, "Starting Discord login with URL: " + authUrl);
         
         try {
-            // Create WebView with proper settings
+            // Create WebView with proper settings for mobile login
             WebView webView = new WebView(activity);
             WebSettings settings = webView.getSettings();
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
             settings.setLoadWithOverviewMode(true);
             settings.setUseWideViewPort(true);
-            settings.setSupportZoom(false);
-            settings.setBuiltInZoomControls(false);
-            settings.setDisplayZoomControls(false);
+            settings.setSupportZoom(true);
+            settings.setBuiltInZoomControls(true);
+            settings.setDisplayZoomControls(false); // Hide zoom controls but allow zooming
             settings.setUserAgentString(settings.getUserAgentString() + " XeloClient/1.0");
+            
+            // Enable better text rendering and form support
+            settings.setTextZoom(100);
+            settings.setSupportMultipleWindows(false);
+            settings.setLoadsImagesAutomatically(true);
+            settings.setBlockNetworkImage(false);
+            settings.setLayoutAlgorithm(WebSettings.LayoutAlgorithm.NORMAL);
+            
+            // Enable form data and password saving (for Discord login)
+            settings.setSaveFormData(true);
+            settings.setSavePassword(true);
+            
+            // Set minimum font size for better readability
+            settings.setMinimumFontSize(14);
+            
+            // Set WebView size explicitly
+            webView.setLayoutParams(new android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            ));
+            
+            // Enable scrolling and touch
+            webView.setScrollBarStyle(android.view.View.SCROLLBARS_INSIDE_OVERLAY);
+            webView.setScrollbarFadingEnabled(true);
             
             // Clear cache and cookies for fresh login
             webView.clearCache(true);
@@ -152,8 +176,8 @@ public class DiscordManager {
             cookieManager.removeAllCookies(null);
             cookieManager.flush();
             
-            // Create dialog with proper styling
-            AlertDialog.Builder builder = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog);
+            // Create dialog with proper styling and full screen
+            AlertDialog.Builder builder = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Light_Dialog);
             builder.setTitle("Login to Discord");
             builder.setView(webView);
             builder.setNegativeButton("Cancel", (dialog, which) -> {
@@ -167,6 +191,20 @@ public class DiscordManager {
             builder.setCancelable(false);
             
             currentDialog = builder.create();
+            
+            // Show dialog first
+            currentDialog.show();
+            
+            // Set dialog to almost full screen for better usability
+            if (currentDialog.getWindow() != null) {
+                android.view.WindowManager.LayoutParams layoutParams = currentDialog.getWindow().getAttributes();
+                layoutParams.width = (int) (activity.getResources().getDisplayMetrics().widthPixels * 0.98);
+                layoutParams.height = (int) (activity.getResources().getDisplayMetrics().heightPixels * 0.90);
+                currentDialog.getWindow().setAttributes(layoutParams);
+                
+                // Add some padding for better appearance
+                currentDialog.getWindow().getDecorView().setPadding(8, 8, 8, 8);
+            }
             
             webView.setWebViewClient(new WebViewClient() {
                 @Override
@@ -246,17 +284,8 @@ public class DiscordManager {
                 }
             });
             
-            // Show dialog and load URL
-            currentDialog.show();
             
-            // Set dialog to full width
-            if (currentDialog.getWindow() != null) {
-                currentDialog.getWindow().setLayout(
-                    (int) (activity.getResources().getDisplayMetrics().widthPixels * 0.95),
-                    (int) (activity.getResources().getDisplayMetrics().heightPixels * 0.8)
-                );
-            }
-            
+            // Load URL after dialog is shown and sized
             webView.loadUrl(authUrl);
             
         } catch (Exception e) {
