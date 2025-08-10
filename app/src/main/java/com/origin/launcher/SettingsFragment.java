@@ -92,6 +92,7 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
         // Initialize Discord manager
         discordManager = new DiscordManager(getActivity()); // Use getActivity() instead of getContext()
         discordManager.setCallback(this);
+        discordManager.setFragment(this); // Set fragment reference for startActivityForResult
         
         // Initialize the global RPC helper
         DiscordRPCHelper.getInstance().initialize(discordManager);
@@ -123,11 +124,12 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
         // Setup Discord login button
         setupDiscordButton();
         
-        // Update Discord UI
+        // Update Discord UI immediately
         updateDiscordUI();
         
         // If already logged in, start RPC
         if (discordManager.isLoggedIn()) {
+            Log.d(TAG, "User already logged in, starting RPC...");
             discordManager.startRPC();
         }
         
@@ -149,24 +151,25 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
         discordLoginButton.setOnClickListener(v -> {
             if (discordManager.isLoggedIn()) {
                 // Show logout confirmation
-                new androidx.appcompat.app.AlertDialog.Builder(getContext())
+                new androidx.appcompat.app.AlertDialog.Builder(requireContext())
                     .setTitle("Logout from Discord")
                     .setMessage("Are you sure you want to logout from Discord? This will also disconnect Rich Presence.")
                     .setPositiveButton("Logout", (dialog, which) -> {
+                        Log.d(TAG, "User confirmed logout");
                         discordManager.logout();
-                        updateDiscordUI();
+                        // UI will be updated via callback
                     })
                     .setNegativeButton("Cancel", null)
                     .show();
             } else {
                 // Disable button during login process
+                Log.d(TAG, "Starting Discord login process from button click");
                 discordLoginButton.setEnabled(false);
                 discordLoginButton.setText("Connecting...");
-                Log.d(TAG, "Starting Discord login process");
                 discordManager.login();
                 
                 // Add a timeout to reset the button if something goes wrong
-                new Handler().postDelayed(() -> {
+                mainHandler.postDelayed(() -> {
                     if (isAdded() && !discordManager.isLoggedIn() && 
                         discordLoginButton.getText().toString().equals("Connecting...")) {
                         Log.w(TAG, "Discord login timeout - resetting button");
@@ -178,17 +181,28 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
     }
     
     private void updateDiscordUI() {
+        if (!isAdded()) {
+            Log.w(TAG, "Fragment not attached, cannot update Discord UI");
+            return;
+        }
+        
+        Log.d(TAG, "Updating Discord UI, isLoggedIn: " + discordManager.isLoggedIn());
+        
         if (discordManager.isLoggedIn()) {
             DiscordManager.DiscordUser user = discordManager.getCurrentUser();
-            discordStatusText.setText("Connected");
-            discordStatusText.setTextColor(0xFF4CAF50); // Green
-            discordUserText.setText("Logged in as: " + user.displayName);
-            discordUserText.setVisibility(View.VISIBLE);
-            discordLoginButton.setText("Logout");
-            discordLoginButton.setEnabled(true);
-            
-            // Set red color for logout button
-            discordLoginButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFF44336)); // Red for logout
+            if (user != null) {
+                discordStatusText.setText("Connected");
+                discordStatusText.setTextColor(0xFF4CAF50); // Green
+                discordUserText.setText("Logged in as: " + user.displayName);
+                discordUserText.setVisibility(View.VISIBLE);
+                discordLoginButton.setText("Logout");
+                discordLoginButton.setEnabled(true);
+                
+                // Set red color for logout button
+                discordLoginButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFF44336)); // Red for logout
+                
+                Log.d(TAG, "Discord UI updated for logged in user: " + user.displayName);
+            }
         } else {
             discordStatusText.setText("Not connected");
             discordStatusText.setTextColor(0xFFF44336); // Red
@@ -198,51 +212,59 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
             
             // Set Discord brand color for login
             discordLoginButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF5865F2)); // Discord blue
+            
+            Log.d(TAG, "Discord UI updated for logged out state");
         }
     }
     
     // Discord callback methods
     @Override
     public void onLoginSuccess(DiscordManager.DiscordUser user) {
+        Log.i(TAG, "Discord login successful for user: " + user.displayName);
+        
         if (isAdded()) {
-            Log.i(TAG, "Discord login successful for user: " + user.displayName);
             Toast.makeText(getContext(), "Successfully logged in as " + user.displayName, Toast.LENGTH_SHORT).show();
             
-            // Update UI immediately
-            updateDiscordUI();
+            // Update UI on main thread
+            mainHandler.post(this::updateDiscordUI);
             
-            Log.i(TAG, "Discord login successful, updating presence");
+            Log.i(TAG, "Discord login successful, UI updated");
         } else {
-            Log.w(TAG, "Fragment not attached, cannot update UI");
+            Log.w(TAG, "Fragment not attached during login success");
         }
     }
     
     @Override
     public void onLoginError(String error) {
+        Log.e(TAG, "Discord login error: " + error);
+        
         if (isAdded()) {
-            Log.e(TAG, "Discord login error: " + error);
             Toast.makeText(getContext(), "Discord login failed: " + error, Toast.LENGTH_LONG).show();
             
-            // Update UI immediately
-            updateDiscordUI();
+            // Update UI on main thread
+            mainHandler.post(this::updateDiscordUI);
         } else {
-            Log.w(TAG, "Fragment not attached, cannot update UI");
+            Log.w(TAG, "Fragment not attached during login error");
         }
     }
     
     @Override
     public void onLogout() {
+        Log.i(TAG, "Discord logout callback received");
+        
         if (isAdded()) {
             Toast.makeText(getContext(), "Logged out from Discord", Toast.LENGTH_SHORT).show();
-            updateDiscordUI();
-            Log.i(TAG, "Discord logout successful");
+            
+            // Update UI on main thread
+            mainHandler.post(this::updateDiscordUI);
         }
     }
     
     @Override
     public void onRPCConnected() {
+        Log.i(TAG, "Discord RPC connected");
+        
         if (isAdded()) {
-            Log.i(TAG, "Discord RPC connected");
             Toast.makeText(getContext(), "Discord Rich Presence connected!", Toast.LENGTH_SHORT).show();
             
             // Show a subtle indication that RPC is working
@@ -260,8 +282,9 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
     
     @Override
     public void onRPCDisconnected() {
+        Log.i(TAG, "Discord RPC disconnected");
+        
         if (isAdded()) {
-            Log.i(TAG, "Discord RPC disconnected");
             // Remove RPC indication from user text
             if (discordUserText.getVisibility() == View.VISIBLE) {
                 String currentText = discordUserText.getText().toString();
@@ -269,6 +292,35 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
                     discordUserText.setText(currentText.replace(" • Rich Presence Active", ""));
                 }
             }
+        }
+    }
+    
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        Log.d(TAG, "onActivityResult called: requestCode=" + requestCode + 
+              ", resultCode=" + resultCode + ", data=" + (data != null ? "present" : "null"));
+        
+        // Handle Discord login result
+        if (requestCode == DiscordLoginActivity.DISCORD_LOGIN_REQUEST_CODE) {
+            Log.d(TAG, "Processing Discord login activity result");
+            
+            if (discordManager != null) {
+                try {
+                    discordManager.handleLoginResult(requestCode, resultCode, data);
+                    Log.d(TAG, "Discord login result handled by manager");
+                } catch (Exception e) {
+                    Log.e(TAG, "Error handling Discord login result", e);
+                    Toast.makeText(getContext(), "Error handling login result: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    updateDiscordUI(); // Reset UI on error
+                }
+            } else {
+                Log.e(TAG, "Discord manager is null in onActivityResult");
+                updateDiscordUI(); // Reset UI
+            }
+        } else {
+            Log.d(TAG, "Not a Discord login result, ignoring (requestCode: " + requestCode + ")");
         }
     }
     
@@ -496,32 +548,9 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
         super.onResume();
         // Update Discord RPC when fragment resumes
         DiscordRPCHelper.getInstance().updateMenuPresence("Settings");
-    }
-    
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
         
-        Log.d(TAG, "onActivityResult: requestCode=" + requestCode + ", resultCode=" + resultCode + ", data=" + (data != null ? "present" : "null"));
-        
-        // Handle Discord login result
-        if (requestCode == 1001) {
-            Log.d(TAG, "Discord login activity result received");
-            if (discordManager != null) {
-                try {
-                    discordManager.handleLoginResult(requestCode, resultCode, data);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error handling Discord login result", e);
-                    Toast.makeText(getContext(), "Error handling login result: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    updateDiscordUI(); // Reset UI on error
-                }
-            } else {
-                Log.e(TAG, "Discord manager is null in onActivityResult");
-                updateDiscordUI(); // Reset UI
-            }
-        } else {
-            Log.d(TAG, "Not a Discord login result, ignoring");
-        }
+        // Force UI update to ensure consistency
+        updateDiscordUI();
     }
     
     @Override
@@ -539,9 +568,9 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
         if (executor != null) {
             executor.shutdown();
         }
-        if (discordManager != null) {
-            discordManager.destroy();
-        }
+        
+        // Don't destroy the discord manager here as it might be used elsewhere
+        // The cleanup should happen at app level
     }
     
     // Helper method to update Discord presence from other activities

@@ -7,6 +7,7 @@ import android.util.Log;
 import android.app.Activity;
 import android.os.Handler;
 import android.os.Looper;
+import androidx.fragment.app.Fragment;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -21,6 +22,7 @@ public class DiscordManager {
     private static final String KEY_AVATAR = "avatar";
     
     private Context context;
+    private Fragment fragment; // Add fragment reference for startActivityForResult
     private SharedPreferences prefs;
     private ExecutorService executor;
     private Handler mainHandler;
@@ -98,6 +100,10 @@ public class DiscordManager {
         this.callback = callback;
     }
     
+    public void setFragment(Fragment fragment) {
+        this.fragment = fragment;
+    }
+    
     public boolean isLoggedIn() {
         return prefs.contains(KEY_ACCESS_TOKEN) && prefs.contains(KEY_USER_ID);
     }
@@ -120,33 +126,42 @@ public class DiscordManager {
     public void login() {
         Log.d(TAG, "Starting Discord login process");
         
-        if (!(context instanceof Activity)) {
-            Log.e(TAG, "Context is not an Activity, cannot start login activity");
-            if (callback != null) {
-                mainHandler.post(() -> callback.onLoginError("Invalid context for login"));
+        // Check if we have both Activity and Fragment references
+        if (fragment != null) {
+            try {
+                Intent intent = new Intent(fragment.getContext(), DiscordLoginActivity.class);
+                Log.d(TAG, "Starting DiscordLoginActivity via Fragment");
+                fragment.startActivityForResult(intent, DiscordLoginActivity.DISCORD_LOGIN_REQUEST_CODE);
+                return;
+            } catch (Exception e) {
+                Log.e(TAG, "Error starting Discord login activity via Fragment", e);
             }
-            return;
         }
         
-        Activity activity = (Activity) context;
-        
-        try {
-            // Start the simplified Discord login activity
-            Intent intent = new Intent(activity, DiscordLoginActivity.class);
-            Log.d(TAG, "Starting DiscordLoginActivity with intent: " + intent);
-            activity.startActivityForResult(intent, 1001); // Request code for Discord login
-        } catch (Exception e) {
-            Log.e(TAG, "Error starting Discord login activity", e);
-            if (callback != null) {
-                mainHandler.post(() -> callback.onLoginError("Error starting login: " + e.getMessage()));
+        // Fallback to Activity if Fragment not available
+        if (context instanceof Activity) {
+            try {
+                Activity activity = (Activity) context;
+                Intent intent = new Intent(activity, DiscordLoginActivity.class);
+                Log.d(TAG, "Starting DiscordLoginActivity via Activity");
+                activity.startActivityForResult(intent, DiscordLoginActivity.DISCORD_LOGIN_REQUEST_CODE);
+                return;
+            } catch (Exception e) {
+                Log.e(TAG, "Error starting Discord login activity via Activity", e);
             }
+        }
+        
+        // If neither worked, report error
+        Log.e(TAG, "Cannot start login activity - no valid context");
+        if (callback != null) {
+            mainHandler.post(() -> callback.onLoginError("Invalid context for login"));
         }
     }
     
     public void handleLoginResult(int requestCode, int resultCode, Intent data) {
         Log.d(TAG, "handleLoginResult: requestCode=" + requestCode + ", resultCode=" + resultCode + ", data=" + (data != null ? "present" : "null"));
         
-        if (requestCode == 1001) {
+        if (requestCode == DiscordLoginActivity.DISCORD_LOGIN_REQUEST_CODE) {
             Log.d(TAG, "Processing Discord login result");
             if (resultCode == Activity.RESULT_OK && data != null) {
                 String accessToken = data.getStringExtra("access_token");
@@ -154,12 +169,14 @@ public class DiscordManager {
                 String username = data.getStringExtra("username");
                 String discriminator = data.getStringExtra("discriminator");
                 String avatar = data.getStringExtra("avatar");
+                boolean success = data.getBooleanExtra("success", false);
                 
-                Log.d(TAG, "Login data - accessToken: " + (accessToken != null ? "present" : "null") + 
+                Log.d(TAG, "Login result data - success: " + success + 
+                          ", accessToken: " + (accessToken != null ? "present" : "null") + 
                           ", userId: " + (userId != null ? "present" : "null") + 
                           ", username: " + (username != null ? "present" : "null"));
                 
-                if (accessToken != null && userId != null && username != null) {
+                if (success && accessToken != null && userId != null && username != null) {
                     // Save user info
                     SharedPreferences.Editor editor = prefs.edit();
                     editor.putString(KEY_ACCESS_TOKEN, accessToken);
@@ -167,7 +184,9 @@ public class DiscordManager {
                     editor.putString(KEY_USERNAME, username);
                     editor.putString(KEY_DISCRIMINATOR, discriminator != null ? discriminator : "0");
                     editor.putString(KEY_AVATAR, avatar != null ? avatar : "");
-                    editor.apply();
+                    boolean saved = editor.commit(); // Use commit() instead of apply() for immediate save
+                    
+                    Log.d(TAG, "User data saved successfully: " + saved);
                     
                     // Set access token for RPC
                     discordRPC.setAccessToken(accessToken);
@@ -176,7 +195,7 @@ public class DiscordManager {
                     DiscordUser user = new DiscordUser(userId, username, discriminator, avatar);
                     
                     if (callback != null) {
-                        callback.onLoginSuccess(user);
+                        mainHandler.post(() -> callback.onLoginSuccess(user));
                     }
                     
                     // Start RPC connection after successful login
@@ -186,21 +205,23 @@ public class DiscordManager {
                 } else {
                     Log.e(TAG, "Invalid login response - missing required data");
                     if (callback != null) {
-                        callback.onLoginError("Invalid login response");
+                        mainHandler.post(() -> callback.onLoginError("Invalid login response"));
                     }
                 }
             } else if (resultCode == Activity.RESULT_CANCELED) {
                 String error = data != null ? data.getStringExtra("error") : "Login cancelled";
                 Log.d(TAG, "Login cancelled: " + error);
                 if (callback != null) {
-                    callback.onLoginError(error);
+                    mainHandler.post(() -> callback.onLoginError(error));
                 }
             } else {
                 Log.e(TAG, "Unexpected result code: " + resultCode);
                 if (callback != null) {
-                    callback.onLoginError("Unexpected result: " + resultCode);
+                    mainHandler.post(() -> callback.onLoginError("Unexpected result: " + resultCode));
                 }
             }
+        } else {
+            Log.d(TAG, "Not a Discord login request code, ignoring");
         }
     }
     
@@ -215,13 +236,19 @@ public class DiscordManager {
     }
     
     public void stopRPC() {
-        Log.d(TAG, "Discord RPC disconnected");
+        Log.d(TAG, "Stopping Discord RPC connection");
         discordRPC.disconnect();
     }
     
     public void updatePresence(String activity, String details) {
-        if (!isLoggedIn() || !rpcConnected) {
-            Log.d(TAG, "Cannot update presence: not logged in or RPC not connected");
+        if (!isLoggedIn()) {
+            Log.d(TAG, "Cannot update presence: not logged in");
+            return;
+        }
+        
+        if (!rpcConnected) {
+            Log.d(TAG, "Cannot update presence: RPC not connected, attempting to connect...");
+            startRPC();
             return;
         }
         
@@ -234,20 +261,22 @@ public class DiscordManager {
         stopRPC();
         
         // Clear WebView data (similar to your friend's approach)
-        try {
-            clearDiscordWebViewData();
-        } catch (Exception e) {
-            Log.w(TAG, "Error clearing WebView data: " + e.getMessage());
-        }
-        
-        // Clear all stored data
-        prefs.edit().clear().apply();
-        
-        Log.i(TAG, "Discord logout successful");
-        mainHandler.post(() -> {
-            if (callback != null) {
-                callback.onLogout();
+        executor.execute(() -> {
+            try {
+                clearDiscordWebViewData();
+            } catch (Exception e) {
+                Log.w(TAG, "Error clearing WebView data: " + e.getMessage());
             }
+            
+            // Clear all stored data
+            prefs.edit().clear().commit(); // Use commit() for immediate clear
+            
+            Log.i(TAG, "Discord logout successful");
+            mainHandler.post(() -> {
+                if (callback != null) {
+                    callback.onLogout();
+                }
+            });
         });
     }
     
@@ -260,7 +289,8 @@ public class DiscordManager {
             
             deleteRecursively(webViewDir);
             deleteRecursively(cacheDir);
-            deleteRecursively(sharedPrefsDir);
+            // Don't delete all shared prefs, just Discord-related ones
+            // deleteRecursively(sharedPrefsDir);
             
         } catch (Exception e) {
             Log.w(TAG, "Error clearing WebView data", e);
