@@ -134,6 +134,8 @@ public class DiscordManager {
     }
     
     public void login() {
+        Log.d(TAG, "Starting Discord login process");
+        
         if (!(context instanceof Activity)) {
             Log.e(TAG, "Context is not an Activity, cannot start login activity");
             if (callback != null) {
@@ -144,9 +146,17 @@ public class DiscordManager {
         
         Activity activity = (Activity) context;
         
-        // Start the dedicated Discord login activity
-        Intent intent = new Intent(activity, DiscordLoginActivity.class);
-        activity.startActivityForResult(intent, 1001); // Request code for Discord login
+        try {
+            // Start the dedicated Discord login activity
+            Intent intent = new Intent(activity, DiscordLoginActivity.class);
+            Log.d(TAG, "Starting DiscordLoginActivity with intent: " + intent);
+            activity.startActivityForResult(intent, 1001); // Request code for Discord login
+        } catch (Exception e) {
+            Log.e(TAG, "Error starting Discord login activity", e);
+            if (callback != null) {
+                mainHandler.post(() -> callback.onLoginError("Error starting login: " + e.getMessage()));
+            }
+        }
     }
     
     public void handleLoginResult(int requestCode, int resultCode, Intent data) {

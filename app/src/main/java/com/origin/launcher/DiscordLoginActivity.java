@@ -39,37 +39,52 @@ public class DiscordLoginActivity extends AppCompatActivity {
         
         // Setup toolbar
         Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle("Login to Discord");
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        if (toolbar != null) {
+            setSupportActionBar(toolbar);
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().setTitle("Login to Discord");
+                getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            }
         }
         
         webView = findViewById(R.id.webview);
         progressBar = findViewById(R.id.progress_bar);
+        
+        if (webView == null) {
+            Log.e(TAG, "WebView not found in layout");
+            finish();
+            return;
+        }
         
         setupWebView();
         loadDiscordLogin();
     }
     
     private void setupWebView() {
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setLoadWithOverviewMode(true);
-        settings.setUseWideViewPort(true);
-        settings.setSupportZoom(true);
-        settings.setBuiltInZoomControls(true);
-        settings.setDisplayZoomControls(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " XeloClient/1.0");
-        settings.setTextZoom(100);
-        settings.setSupportMultipleWindows(false);
-        settings.setLoadsImagesAutomatically(true);
-        settings.setBlockNetworkImage(false);
-        settings.setLayoutAlgorithm(WebSettings.LayoutAlgorithm.NORMAL);
-        settings.setSaveFormData(true);
-        settings.setSavePassword(true);
-        settings.setMinimumFontSize(14);
+        try {
+            WebSettings settings = webView.getSettings();
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            settings.setLoadWithOverviewMode(true);
+            settings.setUseWideViewPort(true);
+            settings.setSupportZoom(true);
+            settings.setBuiltInZoomControls(true);
+            settings.setDisplayZoomControls(false);
+            settings.setUserAgentString(settings.getUserAgentString() + " XeloClient/1.0");
+            settings.setTextZoom(100);
+            settings.setSupportMultipleWindows(false);
+            settings.setLoadsImagesAutomatically(true);
+            settings.setBlockNetworkImage(false);
+            settings.setLayoutAlgorithm(WebSettings.LayoutAlgorithm.NORMAL);
+            settings.setSaveFormData(true);
+            settings.setSavePassword(true);
+            settings.setMinimumFontSize(14);
+        } catch (Exception e) {
+            Log.e(TAG, "Error setting up WebView", e);
+            Toast.makeText(this, "Error setting up WebView: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
         
         // Enable scrolling
         webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
@@ -135,14 +150,20 @@ public class DiscordLoginActivity extends AppCompatActivity {
     }
     
     private void loadDiscordLogin() {
-        String authUrl = "https://discord.com/oauth2/authorize?" +
-            "client_id=" + CLIENT_ID +
-            "&redirect_uri=" + Uri.encode(REDIRECT_URI) +
-            "&response_type=token" +
-            "&scope=" + Uri.encode(SCOPE);
-        
-        Log.d(TAG, "Loading Discord login URL: " + authUrl);
-        webView.loadUrl(authUrl);
+        try {
+            String authUrl = "https://discord.com/oauth2/authorize?" +
+                "client_id=" + CLIENT_ID +
+                "&redirect_uri=" + Uri.encode(REDIRECT_URI) +
+                "&response_type=token" +
+                "&scope=" + Uri.encode(SCOPE);
+            
+            Log.d(TAG, "Loading Discord login URL: " + authUrl);
+            webView.loadUrl(authUrl);
+        } catch (Exception e) {
+            Log.e(TAG, "Error loading Discord login URL", e);
+            Toast.makeText(this, "Error loading Discord login: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            finish();
+        }
     }
     
     private void handleCallback(String callbackUrl) {

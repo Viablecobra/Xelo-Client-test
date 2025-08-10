@@ -481,9 +481,16 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         
+        Log.d(TAG, "onActivityResult: requestCode=" + requestCode + ", resultCode=" + resultCode);
+        
         // Handle Discord login result
         if (discordManager != null) {
-            discordManager.handleLoginResult(requestCode, resultCode, data);
+            try {
+                discordManager.handleLoginResult(requestCode, resultCode, data);
+            } catch (Exception e) {
+                Log.e(TAG, "Error handling Discord login result", e);
+                Toast.makeText(getContext(), "Error handling login result: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
         }
     }
     

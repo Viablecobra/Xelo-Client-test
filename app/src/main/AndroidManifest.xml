@@ -135,7 +135,7 @@
         <activity
             android:name=".DiscordLoginActivity"
             android:exported="false"
-            android:theme="@style/Theme.Material3.Dark"
+            android:theme="@style/Theme.Material3.Dark.NoActionBar.Custom"
             android:windowSoftInputMode="adjustResize" />
         
         <activity
