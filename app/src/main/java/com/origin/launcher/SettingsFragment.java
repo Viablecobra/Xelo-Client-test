@@ -96,6 +96,11 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
         // Initialize the global RPC helper
         DiscordRPCHelper.getInstance().initialize(discordManager);
         
+        // Initialize Discord RPC with the helper
+        if (discordManager != null) {
+            DiscordRPCHelper.getInstance().initializeRPC(discordManager.getDiscordRPC());
+        }
+        
         // Initialize executor and handler
         executor = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
@@ -470,6 +475,16 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
         super.onResume();
         // Update Discord RPC when fragment resumes
         DiscordRPCHelper.getInstance().updateMenuPresence("Settings");
+    }
+    
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        // Handle Discord login result
+        if (discordManager != null) {
+            discordManager.handleLoginResult(requestCode, resultCode, data);
+        }
     }
     
     @Override

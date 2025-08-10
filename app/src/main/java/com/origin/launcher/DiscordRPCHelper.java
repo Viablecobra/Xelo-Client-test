@@ -9,6 +9,7 @@ import android.util.Log;
 public class DiscordRPCHelper {
     private static final String TAG = "DiscordRPCHelper";
     private static DiscordManager discordManager;
+    private static DiscordRPC discordRPC;
     private static DiscordRPCHelper instance;
     
     private DiscordRPCHelper() {}
@@ -29,14 +30,25 @@ public class DiscordRPCHelper {
     }
     
     /**
+     * Initialize with Discord RPC instance
+     */
+    public void initializeRPC(DiscordRPC rpc) {
+        discordRPC = rpc;
+        Log.d(TAG, "DiscordRPCHelper RPC initialized");
+    }
+    
+    /**
      * Update Discord Rich Presence status
      * @param activity What the user is doing (e.g., "Playing Minecraft", "In Menu")
      * @param details Additional details (e.g., "Survival Mode", "World: My World")
      */
     public void updatePresence(String activity, String details) {
-        if (discordManager != null && discordManager.isLoggedIn() && discordManager.isRPCConnected()) {
-            discordManager.updatePresence(activity, details);
+        if (discordRPC != null && discordRPC.isConnected()) {
+            discordRPC.updatePresence(activity, details);
             Log.d(TAG, "Updated Discord presence: " + activity + " - " + details);
+        } else if (discordManager != null && discordManager.isLoggedIn() && discordManager.isRPCConnected()) {
+            discordManager.updatePresence(activity, details);
+            Log.d(TAG, "Updated Discord presence via manager: " + activity + " - " + details);
         } else {
             Log.d(TAG, "Cannot update presence: Discord not connected or RPC not active");
         }
@@ -71,7 +83,8 @@ public class DiscordRPCHelper {
      * Check if Discord RPC is available
      */
     public boolean isRPCAvailable() {
-        return discordManager != null && discordManager.isLoggedIn() && discordManager.isRPCConnected();
+        return (discordRPC != null && discordRPC.isConnected()) || 
+               (discordManager != null && discordManager.isLoggedIn() && discordManager.isRPCConnected());
     }
     
     /**
@@ -98,7 +111,11 @@ public class DiscordRPCHelper {
         if (discordManager != null) {
             discordManager.destroy();
         }
+        if (discordRPC != null) {
+            discordRPC.destroy();
+        }
         discordManager = null;
+        discordRPC = null;
         instance = null;
         Log.d(TAG, "DiscordRPCHelper cleaned up");
     }

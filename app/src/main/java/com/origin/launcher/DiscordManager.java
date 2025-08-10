@@ -5,10 +5,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.util.Log;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.webkit.WebSettings;
-import android.app.AlertDialog;
 import android.app.Activity;
 import org.json.JSONObject;
 import java.io.BufferedReader;
@@ -41,10 +37,9 @@ public class DiscordManager {
     private Context context;
     private SharedPreferences prefs;
     private ExecutorService executor;
-    private ScheduledExecutorService rpcExecutor;
     private Handler mainHandler;
     private DiscordLoginCallback callback;
-    private AlertDialog currentDialog;
+    private DiscordRPC discordRPC;
     
     // RPC state
     private boolean rpcConnected = false;
@@ -79,8 +74,40 @@ public class DiscordManager {
         this.context = context;
         this.prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         this.executor = Executors.newSingleThreadExecutor();
-        this.rpcExecutor = Executors.newScheduledThreadPool(1);
         this.mainHandler = new Handler(Looper.getMainLooper());
+        this.discordRPC = new DiscordRPC(context);
+        this.discordRPC.setCallback(new DiscordRPC.DiscordRPCCallback() {
+            @Override
+            public void onConnected() {
+                rpcConnected = true;
+                mainHandler.post(() -> {
+                    if (callback != null) {
+                        callback.onRPCConnected();
+                    }
+                });
+            }
+            
+            @Override
+            public void onDisconnected() {
+                rpcConnected = false;
+                mainHandler.post(() -> {
+                    if (callback != null) {
+                        callback.onRPCDisconnected();
+                    }
+                });
+            }
+            
+            @Override
+            public void onError(String error) {
+                Log.e(TAG, "Discord RPC error: " + error);
+                rpcConnected = false;
+            }
+            
+            @Override
+            public void onPresenceUpdated() {
+                Log.d(TAG, "Discord presence updated");
+            }
+        });
     }
     
     public void setCallback(DiscordLoginCallback callback) {
@@ -108,7 +135,7 @@ public class DiscordManager {
     
     public void login() {
         if (!(context instanceof Activity)) {
-            Log.e(TAG, "Context is not an Activity, cannot show login dialog");
+            Log.e(TAG, "Context is not an Activity, cannot start login activity");
             if (callback != null) {
                 mainHandler.post(() -> callback.onLoginError("Invalid context for login"));
             }
@@ -117,347 +144,59 @@ public class DiscordManager {
         
         Activity activity = (Activity) context;
         
-        // Ensure we're on the main thread
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            mainHandler.post(this::login);
-            return;
-        }
-        
-        // Use implicit flow for mobile apps (no client secret needed)
-        String authUrl = "https://discord.com/oauth2/authorize?" +
-            "client_id=" + CLIENT_ID +
-            "&redirect_uri=" + Uri.encode(REDIRECT_URI) +
-            "&response_type=token" +  // Use token for implicit flow
-            "&scope=" + Uri.encode(SCOPE);
-        
-        Log.d(TAG, "Starting Discord login with URL: " + authUrl);
-        
-        try {
-            // Create WebView with proper settings for mobile login
-            WebView webView = new WebView(activity);
-            WebSettings settings = webView.getSettings();
-            settings.setJavaScriptEnabled(true);
-            settings.setDomStorageEnabled(true);
-            settings.setLoadWithOverviewMode(true);
-            settings.setUseWideViewPort(true);
-            settings.setSupportZoom(true);
-            settings.setBuiltInZoomControls(true);
-            settings.setDisplayZoomControls(false); // Hide zoom controls but allow zooming
-            settings.setUserAgentString(settings.getUserAgentString() + " XeloClient/1.0");
-            
-            // Enable better text rendering and form support
-            settings.setTextZoom(100);
-            settings.setSupportMultipleWindows(false);
-            settings.setLoadsImagesAutomatically(true);
-            settings.setBlockNetworkImage(false);
-            settings.setLayoutAlgorithm(WebSettings.LayoutAlgorithm.NORMAL);
-            
-            // Enable form data and password saving (for Discord login)
-            settings.setSaveFormData(true);
-            settings.setSavePassword(true);
-            
-            // Set minimum font size for better readability
-            settings.setMinimumFontSize(14);
-            
-            // Set WebView size explicitly
-            webView.setLayoutParams(new android.view.ViewGroup.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT
-            ));
-            
-            // Enable scrolling and touch
-            webView.setScrollBarStyle(android.view.View.SCROLLBARS_INSIDE_OVERLAY);
-            webView.setScrollbarFadingEnabled(true);
-            
-            // Clear cache and cookies for fresh login
-            webView.clearCache(true);
-            webView.clearHistory();
-            android.webkit.CookieManager cookieManager = android.webkit.CookieManager.getInstance();
-            cookieManager.removeAllCookies(null);
-            cookieManager.flush();
-            
-            // Create dialog with proper styling and full screen
-            AlertDialog.Builder builder = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Light_Dialog);
-            builder.setTitle("Login to Discord");
-            builder.setView(webView);
-            builder.setNegativeButton("Cancel", (dialog, which) -> {
-                Log.d(TAG, "Discord login cancelled by user");
-                if (callback != null) {
-                    callback.onLoginError("Login cancelled by user");
-                }
-            });
-            
-            // Make dialog not cancelable by touching outside
-            builder.setCancelable(false);
-            
-            currentDialog = builder.create();
-            
-            // Show dialog first
-            currentDialog.show();
-            
-            // Set dialog to almost full screen for better usability
-            if (currentDialog.getWindow() != null) {
-                android.view.WindowManager.LayoutParams layoutParams = currentDialog.getWindow().getAttributes();
-                layoutParams.width = (int) (activity.getResources().getDisplayMetrics().widthPixels * 0.98);
-                layoutParams.height = (int) (activity.getResources().getDisplayMetrics().heightPixels * 0.90);
-                currentDialog.getWindow().setAttributes(layoutParams);
-                
-                // Add some padding for better appearance
-                currentDialog.getWindow().getDecorView().setPadding(8, 8, 8, 8);
-            }
-            
-            webView.setWebViewClient(new WebViewClient() {
-                @Override
-                public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                    Log.d(TAG, "WebView shouldOverrideUrlLoading: " + url);
-                    
-                    // Check for both redirect URI and fragment with access_token
-                    if (url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) {
-                        Log.d(TAG, "Redirect detected, handling callback: " + url);
-                        
-                        // Close dialog first
-                        mainHandler.post(() -> {
-                            if (currentDialog != null && currentDialog.isShowing()) {
-                                currentDialog.dismiss();
-                            }
-                        });
-                        
-                        // Handle the callback
-                        handleCallback(url);
-                        return true;
-                    }
-                    
-                    return false;
-                }
-                
-                @Override
-                public void onPageFinished(WebView view, String url) {
-                    super.onPageFinished(view, url);
-                    Log.d(TAG, "Page finished loading: " + url);
-                    
-                    // Also check onPageFinished in case shouldOverrideUrlLoading didn't catch it
-                    if (url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) {
-                        Log.d(TAG, "Redirect detected in onPageFinished: " + url);
-                        
-                        mainHandler.post(() -> {
-                            if (currentDialog != null && currentDialog.isShowing()) {
-                                currentDialog.dismiss();
-                            }
-                        });
-                        
-                        handleCallback(url);
-                    }
-                }
-                
-                @Override
-                public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                    super.onReceivedError(view, errorCode, description, failingUrl);
-                    Log.e(TAG, "WebView error: " + description + " for URL: " + failingUrl);
-                    
-                    // Only report error if it's not our redirect URL
-                    if (!failingUrl.startsWith(REDIRECT_URI)) {
-                        mainHandler.post(() -> {
-                            if (callback != null) {
-                                callback.onLoginError("WebView error: " + description);
-                            }
-                        });
-                    }
-                }
-                
-                @Override
-                public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                    super.onPageStarted(view, url, favicon);
-                    Log.d(TAG, "Page started loading: " + url);
-                    
-                    // Check for callback URL early
-                    if (url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) {
-                        Log.d(TAG, "Early redirect detection: " + url);
-                        
-                        mainHandler.post(() -> {
-                            if (currentDialog != null && currentDialog.isShowing()) {
-                                currentDialog.dismiss();
-                            }
-                        });
-                        
-                        handleCallback(url);
-                    }
-                }
-            });
-            
-            
-            // Load URL after dialog is shown and sized
-            webView.loadUrl(authUrl);
-            
-        } catch (Exception e) {
-            Log.e(TAG, "Error creating login dialog", e);
-            if (callback != null) {
-                callback.onLoginError("Failed to create login dialog: " + e.getMessage());
-            }
-        }
+        // Start the dedicated Discord login activity
+        Intent intent = new Intent(activity, DiscordLoginActivity.class);
+        activity.startActivityForResult(intent, 1001); // Request code for Discord login
     }
     
-    private void handleCallback(String callbackUrl) {
-        Log.d(TAG, "Handling callback URL: " + callbackUrl);
-        
-        try {
-            String accessToken = null;
-            String errorParam = null;
-            
-            // Parse URL for access token (implicit flow returns token in URL fragment)
-            if (callbackUrl.contains("#")) {
-                String fragment = callbackUrl.substring(callbackUrl.indexOf("#") + 1);
-                Log.d(TAG, "URL fragment: " + fragment);
+    public void handleLoginResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == 1001) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                String accessToken = data.getStringExtra("access_token");
+                String userId = data.getStringExtra("user_id");
+                String username = data.getStringExtra("username");
+                String discriminator = data.getStringExtra("discriminator");
+                String avatar = data.getStringExtra("avatar");
                 
-                String[] params = fragment.split("&");
-                for (String param : params) {
-                    if (param.contains("=")) {
-                        String[] keyValue = param.split("=", 2);
-                        if (keyValue.length == 2) {
-                            String key = keyValue[0];
-                            String value = URLDecoder.decode(keyValue[1], "UTF-8");
-                            
-                            Log.d(TAG, "Param: " + key + " = " + value);
-                            
-                            if ("access_token".equals(key)) {
-                                accessToken = value;
-                            } else if ("error".equals(key)) {
-                                errorParam = value;
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Also check query parameters as fallback
-            if (accessToken == null) {
-                Uri uri = Uri.parse(callbackUrl);
-                accessToken = uri.getQueryParameter("access_token");
-                if (errorParam == null) {
-                    errorParam = uri.getQueryParameter("error");
-                }
-            }
-            
-            // Make final variables for lambda usage
-            final String finalError = errorParam;
-            final String finalAccessToken = accessToken;
-            
-            Log.d(TAG, "Parsed - Access Token: " + (finalAccessToken != null ? "present" : "null") + 
-                      ", Error: " + finalError);
-            
-            if (finalError != null) {
-                Log.e(TAG, "Discord OAuth error: " + finalError);
-                mainHandler.post(() -> {
-                    if (callback != null) {
-                        callback.onLoginError("Discord authorization failed: " + finalError);
-                    }
-                });
-                return;
-            }
-            
-            if (finalAccessToken != null && !finalAccessToken.isEmpty()) {
-                Log.d(TAG, "Access token received, saving and fetching user info");
-                // Save token and fetch user info
-                prefs.edit().putString(KEY_ACCESS_TOKEN, finalAccessToken).apply();
-                fetchUserInfo(finalAccessToken);
-            } else {
-                Log.e(TAG, "No access token received in callback");
-                mainHandler.post(() -> {
-                    if (callback != null) {
-                        callback.onLoginError("No access token received");
-                    }
-                });
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error handling callback", e);
-            mainHandler.post(() -> {
-                if (callback != null) {
-                    callback.onLoginError("Error processing callback: " + e.getMessage());
-                }
-            });
-        }
-    }
-    
-    private void fetchUserInfo(String accessToken) {
-        executor.execute(() -> {
-            HttpURLConnection conn = null;
-            try {
-                Log.d(TAG, "Fetching user information");
-                
-                URL url = new URL(DISCORD_API_BASE + "/users/@me");
-                conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("GET");
-                conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-                conn.setRequestProperty("User-Agent", "XeloClient/1.0");
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(15000);
-                
-                int responseCode = conn.getResponseCode();
-                Log.d(TAG, "User info response code: " + responseCode);
-                
-                if (responseCode == 200) {
-                    String response = readResponse(conn);
-                    Log.d(TAG, "User info response: " + response);
-                    
-                    JSONObject userJson = new JSONObject(response);
-                    
-                    String id = userJson.getString("id");
-                    String username = userJson.getString("username");
-                    String discriminator = userJson.optString("discriminator", "0");
-                    String avatar = userJson.optString("avatar", "");
-                    
-                    Log.d(TAG, "User info retrieved for: " + username);
-                    
+                if (accessToken != null && userId != null && username != null) {
                     // Save user info
                     SharedPreferences.Editor editor = prefs.edit();
-                    editor.putString(KEY_USER_ID, id);
+                    editor.putString(KEY_ACCESS_TOKEN, accessToken);
+                    editor.putString(KEY_USER_ID, userId);
                     editor.putString(KEY_USERNAME, username);
-                    editor.putString(KEY_DISCRIMINATOR, discriminator);
-                    editor.putString(KEY_AVATAR, avatar);
+                    editor.putString(KEY_DISCRIMINATOR, discriminator != null ? discriminator : "0");
+                    editor.putString(KEY_AVATAR, avatar != null ? avatar : "");
                     editor.apply();
                     
-                    DiscordUser user = new DiscordUser(id, username, discriminator, avatar);
+                    // Set access token for RPC
+                    discordRPC.setAccessToken(accessToken);
+                    discordRPC.setUserId(userId);
                     
-                    mainHandler.post(() -> {
-                        if (callback != null) {
-                            callback.onLoginSuccess(user);
-                        }
-                        // Start RPC connection after successful login
-                        startRPC();
-                    });
+                    DiscordUser user = new DiscordUser(userId, username, discriminator, avatar);
+                    
+                    if (callback != null) {
+                        callback.onLoginSuccess(user);
+                    }
+                    
+                    // Start RPC connection after successful login
+                    startRPC();
                     
                     Log.i(TAG, "Discord login successful for user: " + user.displayName);
-                } else if (responseCode == 401) {
-                    Log.e(TAG, "Invalid access token");
-                    // Clear invalid token
-                    prefs.edit().remove(KEY_ACCESS_TOKEN).apply();
-                    mainHandler.post(() -> {
-                        if (callback != null) {
-                            callback.onLoginError("Authentication failed - please try again");
-                        }
-                    });
                 } else {
-                    String errorResponse = readErrorResponse(conn);
-                    Log.e(TAG, "Failed to fetch user info with code " + responseCode + ": " + errorResponse);
-                    mainHandler.post(() -> {
-                        if (callback != null) {
-                            callback.onLoginError("Failed to fetch user information (HTTP " + responseCode + ")");
-                        }
-                    });
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "Error fetching user info", e);
-                mainHandler.post(() -> {
                     if (callback != null) {
-                        callback.onLoginError("Error fetching user information: " + e.getMessage());
+                        callback.onLoginError("Invalid login response");
                     }
-                });
-            } finally {
-                if (conn != null) {
-                    conn.disconnect();
+                }
+            } else if (resultCode == Activity.RESULT_CANCELED) {
+                String error = data != null ? data.getStringExtra("error") : "Login cancelled";
+                if (callback != null) {
+                    callback.onLoginError(error);
                 }
             }
-        });
+        }
     }
+    
+
     
     public void startRPC() {
         if (!isLoggedIn()) {
@@ -465,53 +204,13 @@ public class DiscordManager {
             return;
         }
         
-        rpcExecutor.execute(() -> {
-            try {
-                Log.d(TAG, "Starting Discord RPC connection");
-                
-                // For now, we'll simulate RPC connection
-                // In a full implementation, you would connect to Discord's Gateway WebSocket
-                rpcConnected = true;
-                
-                mainHandler.post(() -> {
-                    if (callback != null) {
-                        callback.onRPCConnected();
-                    }
-                });
-                
-                // Set initial presence
-                updatePresence("Using Xelo Client", "Just logged in");
-                
-                Log.i(TAG, "Discord RPC connected successfully");
-                
-                // Schedule periodic heartbeat to maintain presence
-                rpcExecutor.scheduleAtFixedRate(() -> {
-                    if (rpcConnected && !currentActivity.isEmpty()) {
-                        updatePresence(currentActivity, currentDetails);
-                    }
-                }, 15, 15, TimeUnit.SECONDS);
-                
-            } catch (Exception e) {
-                Log.e(TAG, "Error starting RPC", e);
-                rpcConnected = false;
-                mainHandler.post(() -> {
-                    if (callback != null) {
-                        callback.onRPCDisconnected();
-                    }
-                });
-            }
-        });
+        Log.d(TAG, "Starting Discord RPC connection");
+        discordRPC.connect();
     }
     
     public void stopRPC() {
-        rpcConnected = false;
         Log.d(TAG, "Discord RPC disconnected");
-        
-        mainHandler.post(() -> {
-            if (callback != null) {
-                callback.onRPCDisconnected();
-            }
-        });
+        discordRPC.disconnect();
     }
     
     public void updatePresence(String activity, String details) {
@@ -523,32 +222,8 @@ public class DiscordManager {
         currentActivity = activity != null ? activity : "";
         currentDetails = details != null ? details : "";
         
-        rpcExecutor.execute(() -> {
-            try {
-                Log.d(TAG, "Updating Discord presence: " + activity + " - " + details);
-                
-                // For demonstration purposes, we're logging the presence update
-                // To implement real Discord RPC, you would need to:
-                // 1. Connect to Discord's Gateway WebSocket
-                // 2. Send proper RPC payloads
-                // 3. Handle heartbeats and reconnections
-                
-                JSONObject presence = new JSONObject();
-                presence.put("name", "Xelo Client");
-                presence.put("type", 0); // Playing
-                presence.put("details", details);
-                presence.put("state", activity);
-                
-                JSONObject timestamps = new JSONObject();
-                timestamps.put("start", System.currentTimeMillis());
-                presence.put("timestamps", timestamps);
-                
-                Log.i(TAG, "Presence updated: " + presence.toString());
-                
-            } catch (Exception e) {
-                Log.e(TAG, "Error updating presence", e);
-            }
-        });
+        Log.d(TAG, "Updating Discord presence: " + activity + " - " + details);
+        discordRPC.updatePresence(activity, details);
     }
     
     public void logout() {
@@ -558,13 +233,6 @@ public class DiscordManager {
         // Clear all stored data
         prefs.edit().clear().apply();
         
-        // Cancel any ongoing dialogs
-        mainHandler.post(() -> {
-            if (currentDialog != null && currentDialog.isShowing()) {
-                currentDialog.dismiss();
-            }
-        });
-        
         Log.i(TAG, "Discord logout successful");
         mainHandler.post(() -> {
             if (callback != null) {
@@ -573,39 +241,14 @@ public class DiscordManager {
         });
     }
     
-    private String readResponse(HttpURLConnection conn) throws Exception {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"))) {
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                response.append(line);
-            }
-            return response.toString();
-        }
-    }
-    
-    private String readErrorResponse(HttpURLConnection conn) throws Exception {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
-                conn.getErrorStream() != null ? conn.getErrorStream() : conn.getInputStream(), "UTF-8"))) {
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                response.append(line);
-            }
-            return response.toString();
-        } catch (Exception e) {
-            return "Unable to read error response: " + e.getMessage();
-        }
-    }
+
     
     public void destroy() {
         stopRPC();
         
-        mainHandler.post(() -> {
-            if (currentDialog != null && currentDialog.isShowing()) {
-                currentDialog.dismiss();
-            }
-        });
+        if (discordRPC != null) {
+            discordRPC.destroy();
+        }
         
         if (executor != null && !executor.isShutdown()) {
             executor.shutdown();
@@ -618,17 +261,9 @@ public class DiscordManager {
                 Thread.currentThread().interrupt();
             }
         }
-        
-        if (rpcExecutor != null && !rpcExecutor.isShutdown()) {
-            rpcExecutor.shutdown();
-            try {
-                if (!rpcExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                    rpcExecutor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                rpcExecutor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-        }
+    }
+    
+    public DiscordRPC getDiscordRPC() {
+        return discordRPC;
     }
 }
