@@ -172,7 +172,7 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
             discordLoginButton.setText("Logout");
             discordLoginButton.setEnabled(true);
             
-            // Set Discord brand color when logged in
+            // Set red color for logout button
             discordLoginButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFF44336)); // Red for logout
         } else {
             discordStatusText.setText("Not connected");
@@ -181,7 +181,7 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
             discordLoginButton.setText("Login with Discord");
             discordLoginButton.setEnabled(true);
             
-            // Set Discord brand color
+            // Set Discord brand color for login
             discordLoginButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF5865F2)); // Discord blue
         }
     }
