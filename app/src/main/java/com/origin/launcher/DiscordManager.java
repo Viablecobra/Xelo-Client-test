@@ -94,13 +94,19 @@ public class DiscordManager {
             "&response_type=code" +
             "&scope=" + Uri.encode(SCOPE);
         
-        // Create WebView dialog for OAuth
+        // Create WebView with better settings
         WebView webView = new WebView(context);
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
+        webView.getSettings().setLoadWithOverviewMode(true);
+        webView.getSettings().setUseWideViewPort(true);
+        webView.getSettings().setSupportZoom(true);
+        webView.getSettings().setBuiltInZoomControls(true);
+        webView.getSettings().setDisplayZoomControls(false);
         
-        AlertDialog dialog = new AlertDialog.Builder(context)
-            .setTitle("Login with Discord")
+        // Create full-screen dialog
+        AlertDialog.Builder builder = new AlertDialog.Builder(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        AlertDialog dialog = builder
             .setView(webView)
             .setNegativeButton("Cancel", (d, which) -> {
                 if (callback != null) {
@@ -108,6 +114,20 @@ public class DiscordManager {
                 }
             })
             .create();
+        
+        // Make dialog full screen
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            );
+            
+            // Enable keyboard support
+            dialog.getWindow().setSoftInputMode(
+                android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE |
+                android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
+            );
+        }
         
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -128,10 +148,27 @@ public class DiscordManager {
                     handleCallback(url);
                 }
             }
+            
+            @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                // Show loading indicator or update title
+                if (dialog.getWindow() != null) {
+                    dialog.setTitle("Loading Discord Login...");
+                }
+            }
         });
         
         webView.loadUrl(authUrl);
         dialog.show();
+        
+        // Final adjustment after dialog is shown
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            );
+        }
     }
     
     private void handleCallback(String callbackUrl) {
