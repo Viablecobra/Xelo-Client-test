@@ -160,13 +160,20 @@ public class DiscordManager {
     }
     
     public void handleLoginResult(int requestCode, int resultCode, Intent data) {
+        Log.d(TAG, "handleLoginResult: requestCode=" + requestCode + ", resultCode=" + resultCode + ", data=" + (data != null ? "present" : "null"));
+        
         if (requestCode == 1001) {
+            Log.d(TAG, "Processing Discord login result");
             if (resultCode == Activity.RESULT_OK && data != null) {
                 String accessToken = data.getStringExtra("access_token");
                 String userId = data.getStringExtra("user_id");
                 String username = data.getStringExtra("username");
                 String discriminator = data.getStringExtra("discriminator");
                 String avatar = data.getStringExtra("avatar");
+                
+                Log.d(TAG, "Login data - accessToken: " + (accessToken != null ? "present" : "null") + 
+                          ", userId: " + (userId != null ? "present" : "null") + 
+                          ", username: " + (username != null ? "present" : "null"));
                 
                 if (accessToken != null && userId != null && username != null) {
                     // Save user info
@@ -193,14 +200,21 @@ public class DiscordManager {
                     
                     Log.i(TAG, "Discord login successful for user: " + user.displayName);
                 } else {
+                    Log.e(TAG, "Invalid login response - missing required data");
                     if (callback != null) {
                         callback.onLoginError("Invalid login response");
                     }
                 }
             } else if (resultCode == Activity.RESULT_CANCELED) {
                 String error = data != null ? data.getStringExtra("error") : "Login cancelled";
+                Log.d(TAG, "Login cancelled: " + error);
                 if (callback != null) {
                     callback.onLoginError(error);
+                }
+            } else {
+                Log.e(TAG, "Unexpected result code: " + resultCode);
+                if (callback != null) {
+                    callback.onLoginError("Unexpected result: " + resultCode);
                 }
             }
         }

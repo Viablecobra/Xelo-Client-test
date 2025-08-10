@@ -162,7 +162,17 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
                 // Disable button during login process
                 discordLoginButton.setEnabled(false);
                 discordLoginButton.setText("Connecting...");
+                Log.d(TAG, "Starting Discord login process");
                 discordManager.login();
+                
+                // Add a timeout to reset the button if something goes wrong
+                new Handler().postDelayed(() -> {
+                    if (isAdded() && !discordManager.isLoggedIn() && 
+                        discordLoginButton.getText().toString().equals("Connecting...")) {
+                        Log.w(TAG, "Discord login timeout - resetting button");
+                        updateDiscordUI();
+                    }
+                }, 30000); // 30 second timeout
             }
         });
     }
@@ -481,16 +491,25 @@ public class SettingsFragment extends Fragment implements DiscordManager.Discord
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         
-        Log.d(TAG, "onActivityResult: requestCode=" + requestCode + ", resultCode=" + resultCode);
+        Log.d(TAG, "onActivityResult: requestCode=" + requestCode + ", resultCode=" + resultCode + ", data=" + (data != null ? "present" : "null"));
         
         // Handle Discord login result
-        if (discordManager != null) {
-            try {
-                discordManager.handleLoginResult(requestCode, resultCode, data);
-            } catch (Exception e) {
-                Log.e(TAG, "Error handling Discord login result", e);
-                Toast.makeText(getContext(), "Error handling login result: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        if (requestCode == 1001) {
+            Log.d(TAG, "Discord login activity result received");
+            if (discordManager != null) {
+                try {
+                    discordManager.handleLoginResult(requestCode, resultCode, data);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error handling Discord login result", e);
+                    Toast.makeText(getContext(), "Error handling login result: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    updateDiscordUI(); // Reset UI on error
+                }
+            } else {
+                Log.e(TAG, "Discord manager is null in onActivityResult");
+                updateDiscordUI(); // Reset UI
             }
+        } else {
+            Log.d(TAG, "Not a Discord login result, ignoring");
         }
     }
     

@@ -209,7 +209,9 @@ public class DiscordLoginActivity extends AppCompatActivity {
             
             if (errorParam != null) {
                 Log.e(TAG, "Discord OAuth error: " + errorParam);
-                setResult(RESULT_CANCELED, new Intent().putExtra("error", "Discord authorization failed: " + errorParam));
+                Intent errorIntent = new Intent().putExtra("error", "Discord authorization failed: " + errorParam);
+                Log.d(TAG, "Setting result CANCELED with error: " + errorParam);
+                setResult(RESULT_CANCELED, errorIntent);
                 finish();
                 return;
             }
@@ -219,7 +221,9 @@ public class DiscordLoginActivity extends AppCompatActivity {
                 fetchUserInfo(accessToken);
             } else {
                 Log.e(TAG, "No access token received in callback");
-                setResult(RESULT_CANCELED, new Intent().putExtra("error", "No access token received"));
+                Intent errorIntent = new Intent().putExtra("error", "No access token received");
+                Log.d(TAG, "Setting result CANCELED with error: No access token received");
+                setResult(RESULT_CANCELED, errorIntent);
                 finish();
             }
         } catch (Exception e) {
@@ -266,8 +270,11 @@ public class DiscordLoginActivity extends AppCompatActivity {
                     resultIntent.putExtra("discriminator", discriminator);
                     resultIntent.putExtra("avatar", avatar);
                     
+                    Log.d(TAG, "Setting result OK with user data for: " + username);
+                    
                     runOnUiThread(() -> {
                         setResult(RESULT_OK, resultIntent);
+                        Log.d(TAG, "Activity result set, finishing activity");
                         finish();
                     });
                     
