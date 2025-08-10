@@ -22,16 +22,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import android.os.Handler;
 import android.os.Looper;
+import java.net.URLDecoder;
 
 public class DiscordManager {
     private static final String TAG = "DiscordManager";
-    private static final String CLIENT_ID = "1403634750557752296"; // Your Discord Application ID
-    private static final String REDIRECT_URI = "https://xelo-client.github.io/discord-callback.html";
+    private static final String CLIENT_ID = "1403634750559752296"; // Corrected Discord Application ID
+    private static final String REDIRECT_URI = "https://xelo-client.github.io/discord-callback.html"; // No trailing slash - cleaner approach
     private static final String SCOPE = "identify rpc";
     private static final String DISCORD_API_BASE = "https://discord.com/api/v10";
-    
-    // Discord RPC Gateway
-    private static final String DISCORD_RPC_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
     
     private static final String PREFS_NAME = "discord_prefs";
     private static final String KEY_ACCESS_TOKEN = "access_token";
@@ -125,12 +123,12 @@ public class DiscordManager {
             return;
         }
         
+        // Use implicit flow for mobile apps (no client secret needed)
         String authUrl = "https://discord.com/oauth2/authorize?" +
             "client_id=" + CLIENT_ID +
             "&redirect_uri=" + Uri.encode(REDIRECT_URI) +
-            "&response_type=token" + // Changed from "code" to "token"
-            "&scope=" + Uri.encode(SCOPE) +
-            "&prompt=consent";
+            "&response_type=token" +  // Use token for implicit flow
+            "&scope=" + Uri.encode(SCOPE);
         
         Log.d(TAG, "Starting Discord login with URL: " + authUrl);
         
@@ -150,7 +148,9 @@ public class DiscordManager {
             // Clear cache and cookies for fresh login
             webView.clearCache(true);
             webView.clearHistory();
-            android.webkit.CookieManager.getInstance().removeAllCookies(null);
+            android.webkit.CookieManager cookieManager = android.webkit.CookieManager.getInstance();
+            cookieManager.removeAllCookies(null);
+            cookieManager.flush();
             
             // Create dialog with proper styling
             AlertDialog.Builder builder = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog);
@@ -163,23 +163,32 @@ public class DiscordManager {
                 }
             });
             
+            // Make dialog not cancelable by touching outside
+            builder.setCancelable(false);
+            
             currentDialog = builder.create();
             
             webView.setWebViewClient(new WebViewClient() {
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                    Log.d(TAG, "WebView loading URL: " + url);
+                    Log.d(TAG, "WebView shouldOverrideUrlLoading: " + url);
                     
+                    // Check for both redirect URI and fragment with access_token
                     if (url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) {
-                        Log.d(TAG, "Redirect URI detected: " + url);
+                        Log.d(TAG, "Redirect detected, handling callback: " + url);
+                        
+                        // Close dialog first
                         mainHandler.post(() -> {
                             if (currentDialog != null && currentDialog.isShowing()) {
                                 currentDialog.dismiss();
                             }
                         });
+                        
+                        // Handle the callback
                         handleCallback(url);
                         return true;
                     }
+                    
                     return false;
                 }
                 
@@ -188,12 +197,16 @@ public class DiscordManager {
                     super.onPageFinished(view, url);
                     Log.d(TAG, "Page finished loading: " + url);
                     
+                    // Also check onPageFinished in case shouldOverrideUrlLoading didn't catch it
                     if (url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) {
+                        Log.d(TAG, "Redirect detected in onPageFinished: " + url);
+                        
                         mainHandler.post(() -> {
                             if (currentDialog != null && currentDialog.isShowing()) {
                                 currentDialog.dismiss();
                             }
                         });
+                        
                         handleCallback(url);
                     }
                 }
@@ -203,12 +216,33 @@ public class DiscordManager {
                     super.onReceivedError(view, errorCode, description, failingUrl);
                     Log.e(TAG, "WebView error: " + description + " for URL: " + failingUrl);
                     
-                    // Notify callback of error
-                    mainHandler.post(() -> {
-                        if (callback != null) {
-                            callback.onLoginError("WebView error: " + description);
-                        }
-                    });
+                    // Only report error if it's not our redirect URL
+                    if (!failingUrl.startsWith(REDIRECT_URI)) {
+                        mainHandler.post(() -> {
+                            if (callback != null) {
+                                callback.onLoginError("WebView error: " + description);
+                            }
+                        });
+                    }
+                }
+                
+                @Override
+                public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                    super.onPageStarted(view, url, favicon);
+                    Log.d(TAG, "Page started loading: " + url);
+                    
+                    // Check for callback URL early
+                    if (url.startsWith(REDIRECT_URI) || url.contains("#access_token=")) {
+                        Log.d(TAG, "Early redirect detection: " + url);
+                        
+                        mainHandler.post(() -> {
+                            if (currentDialog != null && currentDialog.isShowing()) {
+                                currentDialog.dismiss();
+                            }
+                        });
+                        
+                        handleCallback(url);
+                    }
                 }
             });
             
@@ -240,33 +274,46 @@ public class DiscordManager {
             String accessToken = null;
             String errorParam = null;
             
-            // Handle both fragment (#) and query (?) parameters
-            if (callbackUrl.contains("#access_token=")) {
-                // Implicit flow - token in URL fragment
+            // Parse URL for access token (implicit flow returns token in URL fragment)
+            if (callbackUrl.contains("#")) {
                 String fragment = callbackUrl.substring(callbackUrl.indexOf("#") + 1);
+                Log.d(TAG, "URL fragment: " + fragment);
+                
                 String[] params = fragment.split("&");
                 for (String param : params) {
-                    String[] keyValue = param.split("=");
-                    if (keyValue.length == 2) {
-                        String key = keyValue[0];
-                        String value = Uri.decode(keyValue[1]);
-                        if ("access_token".equals(key)) {
-                            accessToken = value;
-                        } else if ("error".equals(key)) {
-                            errorParam = value;
+                    if (param.contains("=")) {
+                        String[] keyValue = param.split("=", 2);
+                        if (keyValue.length == 2) {
+                            String key = keyValue[0];
+                            String value = URLDecoder.decode(keyValue[1], "UTF-8");
+                            
+                            Log.d(TAG, "Param: " + key + " = " + value);
+                            
+                            if ("access_token".equals(key)) {
+                                accessToken = value;
+                            } else if ("error".equals(key)) {
+                                errorParam = value;
+                            }
                         }
                     }
                 }
-            } else {
-                // Fallback to query parameters
+            }
+            
+            // Also check query parameters as fallback
+            if (accessToken == null) {
                 Uri uri = Uri.parse(callbackUrl);
                 accessToken = uri.getQueryParameter("access_token");
-                errorParam = uri.getQueryParameter("error");
+                if (errorParam == null) {
+                    errorParam = uri.getQueryParameter("error");
+                }
             }
             
             // Make final variables for lambda usage
             final String finalError = errorParam;
             final String finalAccessToken = accessToken;
+            
+            Log.d(TAG, "Parsed - Access Token: " + (finalAccessToken != null ? "present" : "null") + 
+                      ", Error: " + finalError);
             
             if (finalError != null) {
                 Log.e(TAG, "Discord OAuth error: " + finalError);
@@ -279,7 +326,7 @@ public class DiscordManager {
             }
             
             if (finalAccessToken != null && !finalAccessToken.isEmpty()) {
-                Log.d(TAG, "Access token received directly");
+                Log.d(TAG, "Access token received, saving and fetching user info");
                 // Save token and fetch user info
                 prefs.edit().putString(KEY_ACCESS_TOKEN, finalAccessToken).apply();
                 fetchUserInfo(finalAccessToken);
@@ -301,8 +348,6 @@ public class DiscordManager {
         }
     }
     
-    // Remove the exchangeCodeForToken method as it's not needed for implicit flow
-    
     private void fetchUserInfo(String accessToken) {
         executor.execute(() -> {
             HttpURLConnection conn = null;
@@ -322,6 +367,8 @@ public class DiscordManager {
                 
                 if (responseCode == 200) {
                     String response = readResponse(conn);
+                    Log.d(TAG, "User info response: " + response);
+                    
                     JSONObject userJson = new JSONObject(response);
                     
                     String id = userJson.getString("id");
@@ -393,8 +440,8 @@ public class DiscordManager {
             try {
                 Log.d(TAG, "Starting Discord RPC connection");
                 
-                // For Android, we'll use HTTP-based presence updates instead of WebSocket
-                // as WebSocket connections are more complex on mobile
+                // For now, we'll simulate RPC connection
+                // In a full implementation, you would connect to Discord's Gateway WebSocket
                 rpcConnected = true;
                 
                 mainHandler.post(() -> {
@@ -413,7 +460,7 @@ public class DiscordManager {
                     if (rpcConnected && !currentActivity.isEmpty()) {
                         updatePresence(currentActivity, currentDetails);
                     }
-                }, 30, 30, TimeUnit.SECONDS);
+                }, 15, 15, TimeUnit.SECONDS);
                 
             } catch (Exception e) {
                 Log.e(TAG, "Error starting RPC", e);
@@ -451,7 +498,12 @@ public class DiscordManager {
             try {
                 Log.d(TAG, "Updating Discord presence: " + activity + " - " + details);
                 
-                // Create presence payload
+                // For demonstration purposes, we're logging the presence update
+                // To implement real Discord RPC, you would need to:
+                // 1. Connect to Discord's Gateway WebSocket
+                // 2. Send proper RPC payloads
+                // 3. Handle heartbeats and reconnections
+                
                 JSONObject presence = new JSONObject();
                 presence.put("name", "Xelo Client");
                 presence.put("type", 0); // Playing
@@ -462,8 +514,6 @@ public class DiscordManager {
                 timestamps.put("start", System.currentTimeMillis());
                 presence.put("timestamps", timestamps);
                 
-                // For now, just log the presence update
-                // In a full implementation, you would send this to Discord's gateway
                 Log.i(TAG, "Presence updated: " + presence.toString());
                 
             } catch (Exception e) {
