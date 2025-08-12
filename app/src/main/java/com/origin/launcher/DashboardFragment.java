@@ -353,40 +353,84 @@ public class DashboardFragment extends Fragment {
     }
     
     private void exportConfig() {
-        try {
+    try {
+        // Check if config file exists
+        if (!configFile.exists()) {
+            Toast.makeText(requireContext(), "Config file not found. Creating default config first.", Toast.LENGTH_LONG).show();
+            createDefaultConfig();
+            
+            // Verify the file was created successfully
             if (!configFile.exists()) {
-                Toast.makeText(requireContext(), "Config file not found. Creating default config first.", Toast.LENGTH_LONG).show();
-                createDefaultConfig();
+                Toast.makeText(requireContext(), "Failed to create config file.", Toast.LENGTH_LONG).show();
+                return;
             }
-            
-            // Create a temporary file in cache for sharing
-            File cacheDir = requireContext().getCacheDir();
-            File tempConfigFile = new File(cacheDir, "config.json");
-            
-            // Copy config file to cache
-            try (FileInputStream fis = new FileInputStream(configFile);
-                 FileOutputStream fos = new FileOutputStream(tempConfigFile)) {
-                byte[] buffer = new byte[1024];
-                int length;
-                while ((length = fis.read(buffer)) > 0) {
-                    fos.write(buffer, 0, length);
-                }
-            }
-            
-            // Share the file
-            Uri fileUri = FileProvider.getUriForFile(requireContext(), "com.origin.launcher.fileprovider", tempConfigFile);
-            Intent shareIntent = new Intent(Intent.ACTION_SEND);
-            shareIntent.setType("application/json");
-            shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
-            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(Intent.createChooser(shareIntent, "Export Config"));
-            Toast.makeText(requireContext(), "Config exported successfully!", Toast.LENGTH_SHORT).show();
-            
-        } catch (IOException e) {
-            Toast.makeText(requireContext(), "Failed to export config: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            e.printStackTrace();
         }
+        
+        // Create a temporary file in the app's cache directory for sharing
+        File cacheDir = requireContext().getCacheDir();
+        File tempConfigFile = new File(cacheDir, "origin_config.json");
+        
+        // Delete existing temp file if it exists
+        if (tempConfigFile.exists()) {
+            tempConfigFile.delete();
+        }
+        
+        // Copy the actual config file to cache directory
+        try (FileInputStream fis = new FileInputStream(configFile);
+             FileOutputStream fos = new FileOutputStream(tempConfigFile)) {
+            
+            byte[] buffer = new byte[1024];
+            int length;
+            while ((length = fis.read(buffer)) > 0) {
+                fos.write(buffer, 0, length);
+            }
+            fos.flush();
+        }
+        
+        // Verify the temp file was created and has content
+        if (!tempConfigFile.exists() || tempConfigFile.length() == 0) {
+            Toast.makeText(requireContext(), "Failed to prepare config file for sharing.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        
+        // Create file URI using FileProvider
+        Uri fileUri;
+        try {
+            fileUri = FileProvider.getUriForFile(
+                requireContext(), 
+                "com.origin.launcher.fileprovider", 
+                tempConfigFile
+            );
+        } catch (IllegalArgumentException e) {
+            Toast.makeText(requireContext(), "Error: Unable to share config file. FileProvider configuration issue.", Toast.LENGTH_LONG).show();
+            e.printStackTrace();
+            return;
+        }
+        
+        // Create share intent
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("application/json");
+        shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
+        shareIntent.putExtra(Intent.EXTRA_SUBJECT, "Origin Launcher Config");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, "Origin Launcher configuration file");
+        shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        
+        // Verify that there are apps that can handle this intent
+        if (shareIntent.resolveActivity(requireContext().getPackageManager()) != null) {
+            startActivity(Intent.createChooser(shareIntent, "Export Config File"));
+            Toast.makeText(requireContext(), "Config file ready to share!", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(requireContext(), "No apps available to share the config file.", Toast.LENGTH_SHORT).show();
+        }
+        
+    } catch (IOException e) {
+        Toast.makeText(requireContext(), "Failed to export config: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        e.printStackTrace();
+    } catch (Exception e) {
+        Toast.makeText(requireContext(), "Unexpected error during config export: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        e.printStackTrace();
     }
+}
     
     private void openConfigFileChooser() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
