@@ -286,7 +286,7 @@ public class DiscordRPC {
                 
                 // Add assets (you can customize these)
                 JSONObject assets = new JSONObject();
-                assets.put("large_image", "xelo_logo"); // You'll need to upload this to Discord
+                assets.put("large_image", "https://cdn.discordapp.com/attachments/1152627555493498952/1405501188878761984/Untitled224_20250729210331.png?ex=689f0e7c&is=689dbcfc&hm=d06b346d167d2d7dabd1a0d3e3f366f71b0af79640bb1a82b95d9c068b23f2a3&"); // You'll need to upload this to Discord
                 assets.put("large_text", "Xelo Client - Best MCPE Client");
                 activity.put("assets", assets);
                 
