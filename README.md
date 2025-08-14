@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://cdn.discordapp.com/attachments/1399114031809433791/1400133554511413438/Untitled225_20250730203813.png?ex=688b877c&is=688a35fc&hm=85b8a400008683855b1a5b4960c544401974e6767862f4e87a04180f2a26a6e2&" alt="Origin Client Logo" />
+  <img src="https://cdn.discordapp.com/attachments/1399114031809433791/1400133554511413438/Untitled225_20250730203813.png?ex=688b877c&is=688a35fc&hm=85b8a400008683855b1a5b4960c544401974e6767862f4e87a04180f2a26a6e2&" alt="Xelo Client Logo" />
   <h1 align="center">Xelo Client</h1>
   <p align="center">
     <b>An open-source Minecraft Bedrock Android client</b><br>
@@ -8,18 +8,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Origin-Client/Origin/stargazers"><img src="https://img.shields.io/github/stars/Origin-Client/Origin?color=yellow&logo=github&style=for-the-badge" alt="Stars"></a>
-  <a href="https://github.com/Origin-Client/Origin/issues"><img src="https://img.shields.io/github/issues/Origin-Client/Origin?style=for-the-badge&logo=github" alt="Issues"></a>
-  <a href="https://github.com/Origin-Client/Origin/commits/main"><img src="https://img.shields.io/github/commit-activity/m/Origin-Client/Origin?style=for-the-badge&logo=git" alt="Commits"></a>
-  <a href="https://dsc.gg/origin-client"><img src="https://img.shields.io/discord/1149378282001813546?label=Join%20Discord&style=for-the-badge&logo=discord&color=5865F2&logoColor=white" alt="Discord"></a>
+  <a href="https://github.com/Xelo-Client/Xelo/stargazers"><img src="https://img.shields.io/github/stars/Xelo-Client/Xelo?color=yellow&logo=github&style=for-the-badge" alt="Stars"></a>
+  <a href="https://github.com/Xelo-Client/Xelo/issues"><img src="https://img.shields.io/github/issues/Xelo-Client/Xelo?style=for-the-badge&logo=github" alt="Issues"></a>
+  <a href="https://github.com/Xelo-Client/Xelo/commits/main"><img src="https://img.shields.io/github/commit-activity/m/Xelo-Client/Xelo?style=for-the-badge&logo=git" alt="Commits"></a>
+  <a href="https://dsc.gg/Xelo-client"><img src="https://img.shields.io/discord/1149378282001813546?label=Join%20Discord&style=for-the-badge&logo=discord&color=5865F2&logoColor=white" alt="Discord"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0.html"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge&logo=gnu" alt="License: GPL v3"></a>
 </p>
 
 ---
 
-## 🚀 What is Origin Client?
+## 🚀 What is Xelo Client?
 
-**Origin Client** is an open-source Minecraft: Bedrock Edition client for Android, designed for performance, modularity, and customization — all with zero root requirements.
+**Xelo Client** is an open-source Minecraft: Bedrock Edition client for Android, designed for performance, modularity, and customization — all with zero root requirements.
 
 > ✅ Lightweight • 🎯 Feature-Rich • 🎮 Customizable • 🧱 Modding-Friendly
 
@@ -45,8 +45,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/Origin-Client/Origin.git
-cd Origin
+git clone https://github.com/Xelo-Client/Xelo.git
+cd Xelo
 
 # Open in Android Studio and build or run:
 ./gradlew assembleDebug
@@ -60,7 +60,7 @@ cd Origin
 ## 🧠 Project Structure
 
 ```
-Origin/
+Xelo/
 ├── app/                   # Main Android app
 │   ├── src/               # Kotlin & Java sources
 │   ├── res/               # UI, drawables, layout
@@ -76,7 +76,7 @@ Origin/
 Join our active developer and player community:
 
 <p align="left">
-  <a href="https://dsc.gg/origin-client">
+  <a href="https://dsc.gg/Xelo-client">
     <img src="https://img.shields.io/badge/Join%20Our%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join Discord">
   </a>
 </p>
@@ -98,7 +98,7 @@ See `CONTRIBUTING.md` for detailed contribution guidelines.
 
 ## 🌟 Show Your Support
 
-If you like Origin Client:
+If you like Xelo Client:
 
 - ⭐ Star this repository
 - 🧪 Help test features & report bugs
@@ -119,23 +119,23 @@ See the [LICENSE](LICENSE) file or visit [https://www.gnu.org/licenses/gpl-3.0.h
 
 ## 🔗 Related Projects
 
-- 🔹 [Origin Client Lite](https://github.com/Origin-Client/Origin-lite)  
+- 🔹 [Xelo Client Lite](https://github.com/Xelo-Client/Xelo-lite)  
   A lightweight texture-pack-based version for low-end users.
 
-- 🖼️ [Origin Assets](https://github.com/Origin-Client/Origin-Assets)  
-  Contains all official Origin branding assets and images.
+- 🖼️ [Xelo Assets](https://github.com/Xelo-Client/Xelo-Assets)  
+  Contains all official Xelo branding assets and images.
 
-- 🌐 [Origin Website](https://github.com/Origin-Client/Origin-website)  
-  The official website repository for Origin Client.
+- 🌐 [Xelo Website](https://github.com/Xelo-Client/Xelo-website)  
+  The official website repository for Xelo Client.
 
 ---
 
 ## 👥 Credits
 
-Huge thanks to all contributors, developers, testers, and supporters who make Origin Client better every day.
+Huge thanks to all contributors, developers, testers, and supporters who make Xelo Client better every day.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Origin-Client/Origin/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png" width="80">
+  <img src="https://raw.githubusercontent.com/Xelo-Client/Xelo/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png" width="80">
 </p>
 
 <h4 align="center">Built with ❤️ by the Minecraft Bedrock community.</h4>
