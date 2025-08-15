@@ -1,20 +1,27 @@
 package com.origin.launcher;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
+    private static final String PREFS_NAME = "app_preferences";
+    private static final String KEY_FIRST_LAUNCH = "first_launch";
     private SettingsFragment settingsFragment;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // Check if this is the first launch
+        checkFirstLaunch();
 
         BottomNavigationView bottomNavigationView = findViewById(R.id.bottom_navigation);
         bottomNavigationView.setOnItemSelectedListener(item -> {
@@ -55,6 +62,29 @@ public class MainActivity extends AppCompatActivity {
                 .replace(R.id.fragment_container, new HomeFragment())
                 .commit();
         }
+    }
+
+    private void checkFirstLaunch() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean isFirstLaunch = prefs.getBoolean(KEY_FIRST_LAUNCH, true);
+        
+        if (isFirstLaunch) {
+            showFirstLaunchDialog();
+            // Mark as not first launch anymore
+            prefs.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply();
+        }
+    }
+
+    private void showFirstLaunchDialog() {
+        new MaterialAlertDialogBuilder(this, com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog)
+                .setTitle("Welcome to Xelo Client")
+                .setMessage("Launch Minecraft once before doing anything, to make the config load properly")
+                .setIcon(R.drawable.ic_info) // You can use any icon you have, or remove this line
+                .setPositiveButton("Proceed", (dialog, which) -> {
+                    dialog.dismiss();
+                })
+                .setCancelable(false) // Prevents dismissing by tapping outside or back button
+                .show();
     }
 
     @Override
