@@ -88,6 +88,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Login with Discord"
+                android:textSize="16sp
                 android:textColor="@color/onPrimary"
                 app:backgroundTint="#5865F2"
                 app:cornerRadius="28dp"
