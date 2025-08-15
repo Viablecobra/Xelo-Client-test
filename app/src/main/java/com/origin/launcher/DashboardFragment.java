@@ -213,6 +213,7 @@ public class DashboardFragment extends Fragment {
             moduleItems.add(new ModuleItem("Java Cubemap", "improves the in-game cubemap bringing it abit lower", "java_cubemap"));
             moduleItems.add(new ModuleItem("Classic Vanilla skins", "Disables the newly added skins by mojang", "classic_skins"));
             moduleItems.add(new ModuleItem("Cape Physics", "Makes your Cape animation more realistic", "cape_physics"));
+            moduleItems.add(new ModuleItem("Entity Culling", "optimizes your fps by rendering only one side mesh", "entity_culling"));
             moduleItems.add(new ModuleItem("Xelo Title", "Changes the Start screen title image", "xelo_title"));
             moduleItems.add(new ModuleItem("White Block Outline", "changes the block selection outline to white", "white_block_outline"));
             
@@ -553,6 +554,7 @@ public class DashboardFragment extends Fragment {
             defaultConfig.put("classic_skins", false);
             defaultConfig.put("white_block_outline", false);
             defaultConfig.put("cape_physics", false);
+            defaultConfig.put("entity_culling", false);
             defaultConfig.put("night_vision", false);
             defaultConfig.put("xelo_title", true);
             
