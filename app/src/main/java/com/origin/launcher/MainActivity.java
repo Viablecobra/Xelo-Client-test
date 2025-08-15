@@ -1,124 +1,437 @@
 package com.origin.launcher;
 
+import android.content.DialogInterface;
+import org.jetbrains.annotations.NotNull;
+import android.annotation.SuppressLint;
+import android.app.AlertDialog;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.View;
+import android.widget.TextView;
+import android.widget.Button;
+import android.widget.EditText;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import androidx.core.content.FileProvider;
+
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.util.Log;
-import androidx.appcompat.app.AppCompatActivity;
+import android.os.Build;
 import androidx.fragment.app.Fragment;
-import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import android.view.LayoutInflater;
+import android.view.ViewGroup;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.io.FileWriter;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import android.os.Looper;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
-public class MainActivity extends AppCompatActivity {
-    private static final String TAG = "MainActivity";
-    private static final String PREFS_NAME = "app_preferences";
-    private static final String KEY_FIRST_LAUNCH = "first_launch";
-    private SettingsFragment settingsFragment;
+public class HomeFragment extends Fragment {
+
+    private TextView listener;
+    private Button mbl2_button;
+    private com.google.android.material.button.MaterialButton shareLogsButton;
+    private File logFile; // Reference to the log file
+    private FileWriter logWriter; // Writer for the log file
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-
-        // Check if this is the first launch
-        checkFirstLaunch();
-
-        BottomNavigationView bottomNavigationView = findViewById(R.id.bottom_navigation);
-        bottomNavigationView.setOnItemSelectedListener(item -> {
-            Fragment selectedFragment = null;
-            String presenceActivity = "";
-            
-            if (item.getItemId() == R.id.navigation_home) {
-                selectedFragment = new HomeFragment();
-                presenceActivity = "In Home";
-            } else if (item.getItemId() == R.id.navigation_dashboard) {
-                selectedFragment = new DashboardFragment();
-                presenceActivity = "In Dashboard";
-            } else if (item.getItemId() == R.id.navigation_settings) {
-                // Keep reference to settings fragment for activity results
-                if (settingsFragment == null) {
-                    settingsFragment = new SettingsFragment();
-                }
-                selectedFragment = settingsFragment;
-                presenceActivity = "In Settings";
-            }
-
-            if (selectedFragment != null) {
-                getSupportFragmentManager().beginTransaction()
-                    .replace(R.id.fragment_container, selectedFragment)
-                    .commit();
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_home, container, false);
+        
+        listener = view.findViewById(R.id.listener);
+        mbl2_button = view.findViewById(R.id.mbl2_load);
+        shareLogsButton = view.findViewById(R.id.share_logs_button);
+        Handler handler = new Handler(Looper.getMainLooper());
+        
+        // Initialize log file
+        initializeLogFile();
+        
+        mbl2_button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mbl2_button.setEnabled(false);
+                String initialMessage = "Starting Minecraft launcher...";
+                listener.setText(initialMessage);
+                writeToLogFile(initialMessage);
                 
-                // Update Discord presence with custom text
-                DiscordRPCHelper.getInstance().updatePresence(presenceActivity, "Using the best MCPE Client");
-                
-                return true;
+                // Get package name from settings
+                String packageName = getPackageNameFromSettings();
+                startLauncher(handler, listener, "launcher_mbl2.dex", packageName);
             }
-            return false;
         });
+        
+        // Set initial log text
+        String readyMessage = "Ready to launch Minecraft";
+        listener.setText(readyMessage);
+        writeToLogFile(readyMessage);
+        
+        // Set up share button
+        shareLogsButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                shareLogs();
+            }
+        });
+        
+        return view;
+    }
 
-        // Set default fragment
-        if (savedInstanceState == null) {
-            getSupportFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new HomeFragment())
-                .commit();
+    private void initializeLogFile() {
+        try {
+            // Create log file in app's files directory: com.origin.launcher/files/oclatestlog.txt
+            logFile = new File(requireContext().getFilesDir(), "oclatestlog.txt");
+            
+            // Create the file if it doesn't exist
+            if (!logFile.exists()) {
+                logFile.createNewFile();
+            }
+            
+            // Initialize with timestamp
+            logWriter = new FileWriter(logFile, false); // false = overwrite existing content
+            String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+            logWriter.write("=== Origin Client Launcher Log - " + timestamp + " ===\n");
+            logWriter.flush();
+            
+        } catch (IOException e) {
+            android.widget.Toast.makeText(requireContext(), "Failed to initialize log file: " + e.getMessage(), android.widget.Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void checkFirstLaunch() {
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        boolean isFirstLaunch = prefs.getBoolean(KEY_FIRST_LAUNCH, true);
-        
-        if (isFirstLaunch) {
-            showFirstLaunchDialog();
-            // Mark as not first launch anymore
-            prefs.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply();
+    private void writeToLogFile(String message) {
+        try {
+            if (logWriter != null) {
+                logWriter.write(message + "\n");
+                logWriter.flush(); // Ensure data is written immediately
+            }
+        } catch (IOException e) {
+            // Silent fail to avoid disrupting the main functionality
         }
     }
 
-    private void showFirstLaunchDialog() {
-        new MaterialAlertDialogBuilder(this, com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog)
-                .setTitle("Welcome to Xelo Client")
-                .setMessage("Launch Minecraft once before doing anything, to make the config load properly")
-                .setIcon(R.drawable.ic_info) // You can use any icon you have, or remove this line
-                .setPositiveButton("Proceed", (dialog, which) -> {
-                    dialog.dismiss();
-                })
-                .setCancelable(false) // Prevents dismissing by tapping outside or back button
-                .show();
+    private void appendLog(String message) {
+        // Update TextView
+        listener.append(message);
+        // Write to log file
+        writeToLogFile(message);
+    }
+
+    private void setLogText(String message) {
+        // Update TextView
+        listener.setText(message);
+        // Write to log file (with newline to separate from previous content)
+        writeToLogFile("\n" + message);
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        
-        Log.d(TAG, "MainActivity onActivityResult: requestCode=" + requestCode + 
-              ", resultCode=" + resultCode + ", data=" + (data != null ? "present" : "null"));
-        
-        // Forward the result to the settings fragment if it's a Discord login
-        if (requestCode == DiscordLoginActivity.DISCORD_LOGIN_REQUEST_CODE && settingsFragment != null) {
-            Log.d(TAG, "Forwarding Discord login result to SettingsFragment");
-            settingsFragment.onActivityResult(requestCode, resultCode, data);
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        // Update presence when app comes to foreground
-        DiscordRPCHelper.getInstance().updatePresence("Using Xelo Client", "Using the best MCPE Client");
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        // Update presence when app goes to background  
-        DiscordRPCHelper.getInstance().updatePresence("Xelo Client", "Using the best MCPE Client");
-    }
-
-    @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         super.onDestroy();
-        // Clean up RPC helper
-        DiscordRPCHelper.getInstance().cleanup();
+        // Close log writer when fragment is destroyed
+        try {
+            if (logWriter != null) {
+                logWriter.close();
+            }
+        } catch (IOException e) {
+            // Silent fail
+        }
+    }
+
+    private String getPackageNameFromSettings() {
+        SharedPreferences prefs = requireContext().getSharedPreferences("settings", 0);
+        return prefs.getString("mc_package_name", "com.mojang.minecraftpe");
+    }
+
+    private void shareLogs() {
+        try {
+            // Ensure any pending writes are flushed
+            if (logWriter != null) {
+                logWriter.flush();
+            }
+            
+            // Check if log file exists and has content
+            if (!logFile.exists() || logFile.length() == 0) {
+                android.widget.Toast.makeText(requireContext(), "No logs available to share", android.widget.Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            // Create the sharing intent
+            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.setType("text/plain");
+            
+            // Get the file URI using FileProvider
+            android.net.Uri fileUri = FileProvider.getUriForFile(
+                requireContext(),
+                "com.origin.launcher.fileprovider",
+                logFile
+            );
+            
+            shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
+            shareIntent.putExtra(Intent.EXTRA_SUBJECT, "Origin Client Logs");
+            shareIntent.putExtra(Intent.EXTRA_TEXT, "Origin Client Latest Logs - " + logFile.getAbsolutePath());
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            
+            // Start the sharing activity
+            startActivity(Intent.createChooser(shareIntent, "Share Logs"));
+            
+        } catch (Exception e) {
+            // Show error message
+            android.widget.Toast.makeText(requireContext(), "Failed to share logs: " + e.getMessage(), android.widget.Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void startLauncher(Handler handler, TextView listener, String launcherDexName, String mcPackageName) {    
+        Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                // Check if fragment is still attached
+                if (!isAdded()) {
+                    return;
+                }
+                
+                File cacheDexDir = new File(requireActivity().getCodeCacheDir(), "dex");
+                handleCacheCleaning(cacheDexDir, handler, listener);
+                
+                ApplicationInfo mcInfo = null;
+                try {
+                    mcInfo = requireActivity().getPackageManager().getApplicationInfo(mcPackageName, PackageManager.GET_META_DATA);
+                    final ApplicationInfo finalMcInfo = mcInfo;
+                    handler.post(() -> appendLog("\n-> Found Minecraft at: " + finalMcInfo.sourceDir));
+                } catch(Exception e) {
+                    handler.post(() -> alertAndExit("Minecraft cant be found", "Perhaps you dont have it installed?"));
+                    return;
+                };
+                
+                Object pathList = getPathList(requireActivity().getClassLoader());
+                processDexFiles(mcInfo, cacheDexDir, pathList, handler, listener, launcherDexName);
+                if (!processNativeLibraries(mcInfo, pathList, handler, listener)) {
+                    return;
+                };
+                
+                handler.post(() -> appendLog("\n-> Launching Minecraft..."));
+                
+                // Final check before launching
+                if (isAdded()) {
+                    launchMinecraft(mcInfo);
+                } else {
+                    handler.post(() -> {
+                        setLogText("Fragment no longer attached, cannot launch Minecraft");
+                        mbl2_button.setEnabled(true);
+                    });
+                }
+            } catch (Exception e) {
+                String logMessage = e.getCause() != null ? e.getCause().toString() : e.toString();                
+                handler.post(() -> {
+                    setLogText("Launching failed: " + logMessage);
+                    mbl2_button.setEnabled(true);
+                });                
+            }
+        });    
+    }
+
+    @SuppressLint("SetTextI18n")
+    private void handleCacheCleaning(@NotNull File cacheDexDir, Handler handler, TextView listener) {
+        if (cacheDexDir.exists() && cacheDexDir.isDirectory()) {
+            handler.post(() -> setLogText("-> " + cacheDexDir.getAbsolutePath() + " not empty, do cleaning"));
+            for (File file : Objects.requireNonNull(cacheDexDir.listFiles())) {
+                if (file.delete()) {
+                    handler.post(() -> appendLog("\n-> " + file.getName() + " deleted"));
+                }
+            }
+        } else {
+            handler.post(() -> setLogText("-> " + cacheDexDir.getAbsolutePath() + " is empty, skip cleaning"));
+        }
+    }
+
+    private Object getPathList(@NotNull ClassLoader classLoader) throws Exception {
+        Field pathListField = Objects.requireNonNull(classLoader.getClass().getSuperclass()).getDeclaredField("pathList");
+        pathListField.setAccessible(true);
+        return pathListField.get(classLoader);
+    }
+
+    private void processDexFiles(ApplicationInfo mcInfo, File cacheDexDir, @NotNull Object pathList, @NotNull Handler handler, TextView listener, String launcherDexName) throws Exception {
+        Method addDexPath = pathList.getClass().getDeclaredMethod("addDexPath", String.class, File.class);
+        File launcherDex = new File(cacheDexDir, launcherDexName);
+
+        copyFile(requireActivity().getAssets().open(launcherDexName), launcherDex);
+        handler.post(() -> appendLog("\n-> " + launcherDexName + " copied to " + launcherDex.getAbsolutePath()));
+
+        if (launcherDex.setReadOnly()) {
+            addDexPath.invoke(pathList, launcherDex.getAbsolutePath(), null);
+            handler.post(() -> appendLog("\n-> " + launcherDexName + " added to dex path list"));
+        } else {
+            throw new Exception("Failed to set launcher dex as read-only");
+        }
+        
+        ArrayList<String> copiedDexes = new ArrayList<String>();
+        try (ZipFile zipFile = new ZipFile(mcInfo.sourceDir)) {
+            for (int i = 10; i >= 0; i--) {
+                String dexName = "classes" + (i == 0 ? "" : i) + ".dex";
+                ZipEntry dexFile = zipFile.getEntry(dexName);
+                if (dexFile != null) {
+                    File mcDex = new File(cacheDexDir, dexName);
+                    copyFile(zipFile.getInputStream(dexFile), mcDex);
+                    if (mcDex.setReadOnly()) {
+                        addDexPath.invoke(pathList, mcDex.getAbsolutePath(), null);
+                        copiedDexes.add(dexName);
+                    } else {
+                        handler.post(() -> appendLog("\n-> Warning: Failed to set " + dexName + " as read-only"));
+                    }
+                }
+            }
+        } catch (Throwable th) {
+            handler.post(() -> appendLog("\n-> Warning: Error processing dex files: " + th.getMessage()));
+        }    
+        handler.post(() -> appendLog("\n-> Dex files " + copiedDexes.toString() + " copied and added to dex path list"));        
+    }
+
+    private boolean processNativeLibraries(ApplicationInfo mcInfo, @NotNull Object pathList, @NotNull Handler handler, TextView listener) throws Exception {
+        FileInputStream inStream = new FileInputStream(getApkWithLibs(mcInfo));
+        BufferedInputStream bufInStream = new BufferedInputStream(inStream);
+        ZipInputStream inZipStream = new ZipInputStream(bufInStream);
+        if (!checkLibCompatibility(inZipStream)) {
+            handler.post(() -> alertAndExit("Wrong minecraft architecture", "The minecraft you have installed does not support the same main architecture (" + Build.SUPPORTED_ABIS[0] + ") your device uses, mbloader cant work with it"));
+            return false;
+        } 		    
+        Method addNativePath = pathList.getClass().getDeclaredMethod("addNativePath", Collection.class);
+        ArrayList<String> libDirList = new ArrayList<>();
+        File libdir = new File(mcInfo.nativeLibraryDir);
+        if (libdir.list() == null || libdir.list().length == 0 
+         || (mcInfo.flags & ApplicationInfo.FLAG_EXTRACT_NATIVE_LIBS) != ApplicationInfo.FLAG_EXTRACT_NATIVE_LIBS) {
+            loadUnextractedLibs(mcInfo);
+            libDirList.add(requireActivity().getCodeCacheDir().getAbsolutePath() + "/");
+        } else {
+            libDirList.add(mcInfo.nativeLibraryDir);
+        }
+        addNativePath.invoke(pathList, libDirList);
+        handler.post(() -> appendLog("\n-> " + mcInfo.nativeLibraryDir + " added to native library directory path"));
+        return true;
+    }
+
+    private static Boolean checkLibCompatibility(ZipInputStream zip) throws Exception{
+         ZipEntry ze = null;
+         String requiredLibDir = "lib/" + Build.SUPPORTED_ABIS[0] + "/";
+         while ((ze = zip.getNextEntry()) != null) {
+             if (ze.getName().startsWith(requiredLibDir)) {
+                 return true;
+             }
+         }
+         zip.close();
+         return false;
+     }
+
+     private void alertAndExit(String issue, String description) {
+        AlertDialog alertDialog = new AlertDialog.Builder(requireActivity()).create();
+        alertDialog.setTitle(issue);
+        alertDialog.setMessage(description);
+        alertDialog.setCancelable(false);
+        alertDialog.setButton(AlertDialog.BUTTON_NEUTRAL, "Exit",
+        new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int which) {
+                requireActivity().finish();
+            }
+        });
+        alertDialog.show();         
+     }
+
+    private void loadUnextractedLibs(ApplicationInfo appInfo) throws Exception {
+        FileInputStream inStream = new FileInputStream(getApkWithLibs(appInfo));
+        BufferedInputStream bufInStream = new BufferedInputStream(inStream);
+        ZipInputStream inZipStream = new ZipInputStream(bufInStream);
+        String zipPath = "lib/" + Build.SUPPORTED_ABIS[0] + "/";
+        String outPath = requireActivity().getCodeCacheDir().getAbsolutePath() + "/";
+        File dir = new File(outPath);
+        dir.mkdir();
+        extractDir(appInfo, inZipStream, zipPath, outPath);
+    }
+
+    public String getApkWithLibs(ApplicationInfo pkg) throws PackageManager.NameNotFoundException {
+        String[] sn=pkg.splitSourceDirs;
+        if (sn != null && sn.length > 0) {
+            String cur_abi = Build.SUPPORTED_ABIS[0].replace('-','_');
+            for(String n:sn){
+                if(n.contains(cur_abi)){
+                    return n;
+                }
+            }
+        }
+        return pkg.sourceDir;
+    }
+
+    private static void extractDir(ApplicationInfo mcInfo, ZipInputStream zip, String zip_folder, String out_folder ) throws Exception{
+        ZipEntry ze = null;
+        while ((ze = zip.getNextEntry()) != null) {
+            if (ze.getName().startsWith(zip_folder) && !ze.getName().contains("c++_shared")) {
+                String strippedName = ze.getName().substring(zip_folder.length());
+                String path = out_folder + "/" + strippedName;
+                OutputStream out = new FileOutputStream(path);
+                BufferedOutputStream outBuf = new BufferedOutputStream(out);
+                byte[] buffer = new byte[9000];
+                int len;
+                while ((len = zip.read(buffer)) != -1) {
+                    outBuf.write(buffer, 0, len);
+                }
+                outBuf.close();
+            }
+        }
+        zip.close();
+    }
+
+    private void launchMinecraft(ApplicationInfo mcInfo) throws ClassNotFoundException {
+        Class<?> launcherClass = requireActivity().getClassLoader().loadClass("com.mojang.minecraftpe.Launcher");
+        
+        // Create a new intent for Minecraft to ensure it launches in a new instance
+        Intent mcActivity = new Intent(requireActivity(), launcherClass);
+        mcActivity.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        mcActivity.putExtra("MC_SRC", mcInfo.sourceDir);
+
+        if (mcInfo.splitSourceDirs != null) {
+            ArrayList<String> listSrcSplit = new ArrayList<>();
+            Collections.addAll(listSrcSplit, mcInfo.splitSourceDirs);
+            mcActivity.putExtra("MC_SPLIT_SRC", listSrcSplit);
+        }
+        
+        // Add additional flags to ensure proper launch
+        mcActivity.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
+        
+        startActivity(mcActivity);
+        requireActivity().finish();
+    }
+
+    private static void copyFile(InputStream from, @NotNull File to) throws IOException {
+        File parentDir = to.getParentFile();
+        if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
+            throw new IOException("Failed to create directories");
+        }
+        if (!to.exists() && !to.createNewFile()) {
+            throw new IOException("Failed to create new file");
+        }
+        try (BufferedInputStream input = new BufferedInputStream(from);
+             BufferedOutputStream output = new BufferedOutputStream(Files.newOutputStream(to.toPath()))) {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = input.read(buffer)) != -1) {
+                output.write(buffer, 0, bytesRead);
+            }
+        }
     }
 }
