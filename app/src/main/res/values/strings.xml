@@ -2,7 +2,7 @@
     <string name="app_name">Xelo Client</string>
     <string name="xal_token">ms-xal-0000000048183522</string>
 	<string name="default_string">Hello moron!</string>
-	<string name="mbl2_desc">Experimental Build</string>
+	<string name="buildinfo">Release Build</string>
 	<string name="welcome">Xelo Client - Minecraft Bedrock Client</string>
 	<string name="mc_pkgname">minecraft package id:</string>
 </resources>
