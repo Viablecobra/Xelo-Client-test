@@ -2,4 +2,6 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="shared_files" path="." />
     <files-path name="files" path="." />
+    <files-path name="origin_mods" path="origin_mods/" />
+    <external-files-path name="external_files" path="." />
 </paths>

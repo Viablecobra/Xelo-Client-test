@@ -367,44 +367,60 @@ public class DashboardFragment extends Fragment {
             }
         }
         
-        // Create a temporary file in the app's cache directory for sharing
-        File cacheDir = requireContext().getCacheDir();
-        File tempConfigFile = new File(cacheDir, "origin_config.json");
+        // Create file URI using FileProvider - try multiple approaches
+        Uri fileUri = null;
         
-        // Delete existing temp file if it exists
-        if (tempConfigFile.exists()) {
-            tempConfigFile.delete();
-        }
-        
-        // Copy the actual config file to cache directory
-        try (FileInputStream fis = new FileInputStream(configFile);
-             FileOutputStream fos = new FileOutputStream(tempConfigFile)) {
-            
-            byte[] buffer = new byte[1024];
-            int length;
-            while ((length = fis.read(buffer)) > 0) {
-                fos.write(buffer, 0, length);
-            }
-            fos.flush();
-        }
-        
-        // Verify the temp file was created and has content
-        if (!tempConfigFile.exists() || tempConfigFile.length() == 0) {
-            Toast.makeText(requireContext(), "Failed to prepare config file for sharing.", Toast.LENGTH_LONG).show();
-            return;
-        }
-        
-        // Create file URI using FileProvider
-        Uri fileUri;
+        // First approach: Use the actual config file directly
         try {
             fileUri = FileProvider.getUriForFile(
                 requireContext(), 
                 "com.origin.launcher.fileprovider", 
-                tempConfigFile
+                configFile
             );
         } catch (IllegalArgumentException e) {
-            Toast.makeText(requireContext(), "Error: Unable to share config file. FileProvider configuration issue.", Toast.LENGTH_LONG).show();
-            e.printStackTrace();
+            // If that fails, copy to cache directory
+            File cacheDir = requireContext().getCacheDir();
+            File tempConfigFile = new File(cacheDir, "origin_config.json");
+            
+            // Delete existing temp file if it exists
+            if (tempConfigFile.exists()) {
+                tempConfigFile.delete();
+            }
+            
+            // Copy the actual config file to cache directory
+            try (FileInputStream fis = new FileInputStream(configFile);
+                 FileOutputStream fos = new FileOutputStream(tempConfigFile)) {
+                
+                byte[] buffer = new byte[1024];
+                int length;
+                while ((length = fis.read(buffer)) > 0) {
+                    fos.write(buffer, 0, length);
+                }
+                fos.flush();
+            }
+            
+            // Verify the temp file was created and has content
+            if (!tempConfigFile.exists() || tempConfigFile.length() == 0) {
+                Toast.makeText(requireContext(), "Failed to prepare config file for sharing.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            
+            // Create file URI for the temp file
+            try {
+                fileUri = FileProvider.getUriForFile(
+                    requireContext(), 
+                    "com.origin.launcher.fileprovider", 
+                    tempConfigFile
+                );
+            } catch (IllegalArgumentException e2) {
+                Toast.makeText(requireContext(), "Error: FileProvider configuration issue. Check file_provider_paths.xml", Toast.LENGTH_LONG).show();
+                e2.printStackTrace();
+                return;
+            }
+        }
+        
+        if (fileUri == null) {
+            Toast.makeText(requireContext(), "Failed to create file URI for sharing.", Toast.LENGTH_LONG).show();
             return;
         }
         
