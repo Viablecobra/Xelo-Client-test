@@ -31,6 +31,7 @@ import java.io.OutputStream;
 import java.io.FileOutputStream;
 import java.io.FileInputStream;
 import java.io.FileWriter;
+import java.io.BufferedWriter;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,13 +44,20 @@ import java.util.zip.ZipInputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import android.os.Looper;
+import java.android.os.Looper;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 public class HomeFragment extends Fragment {
 
     private TextView listener;
     private Button mbl2_button;
     private com.google.android.material.button.MaterialButton shareLogsButton;
+    
+    // Store all log messages
+    private StringBuilder logBuffer = new StringBuilder();
+    private File persistentLogFile;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -60,11 +68,17 @@ public class HomeFragment extends Fragment {
         shareLogsButton = view.findViewById(R.id.share_logs_button);
         Handler handler = new Handler(Looper.getMainLooper());
         
+        // Initialize persistent log file
+        persistentLogFile = new File(requireContext().getFilesDir(), "latestlog.txt");
+        
+        // Load existing logs if they exist
+        loadExistingLogs();
+        
         mbl2_button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 mbl2_button.setEnabled(false);
-                listener.setText("Starting Minecraft launcher...");
+                logMessage("Starting Minecraft launcher...");
                 
                 // Get package name from settings
                 String packageName = getPackageNameFromSettings();
@@ -73,7 +87,8 @@ public class HomeFragment extends Fragment {
         });
         
         // Set initial log text
-        listener.setText("Ready to launch Minecraft");
+        String initialMessage = "Ready to launch Minecraft - " + getCurrentTimestamp();
+        logMessage(initialMessage);
         
         // Set up share button
         shareLogsButton.setOnClickListener(new View.OnClickListener() {
@@ -85,6 +100,72 @@ public class HomeFragment extends Fragment {
         
         return view;
     }
+    
+    private void loadExistingLogs() {
+        try {
+            if (persistentLogFile.exists()) {
+                StringBuilder existingLogs = new StringBuilder();
+                java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(persistentLogFile));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    existingLogs.append(line).append("\n");
+                }
+                reader.close();
+                
+                logBuffer = existingLogs;
+                listener.setText(logBuffer.toString());
+            } else {
+                // Create the log file
+                persistentLogFile.createNewFile();
+            }
+        } catch (Exception e) {
+            logMessage("Error loading existing logs: " + e.getMessage());
+        }
+    }
+    
+    private void logMessage(String message) {
+        String timestampedMessage = getCurrentTimestamp() + " - " + message;
+        
+        // Add to buffer
+        logBuffer.append(timestampedMessage).append("\n");
+        
+        // Update UI
+        if (listener != null) {
+            listener.setText(logBuffer.toString());
+        }
+        
+        // Write to persistent file
+        saveToPersistentLog(timestampedMessage);
+    }
+    
+    private void appendLogMessage(String message) {
+        String timestampedMessage = getCurrentTimestamp() + " - " + message;
+        
+        // Add to buffer
+        logBuffer.append(timestampedMessage).append("\n");
+        
+        // Update UI
+        if (listener != null) {
+            listener.append("\n" + timestampedMessage);
+        }
+        
+        // Write to persistent file
+        saveToPersistentLog(timestampedMessage);
+    }
+    
+    private void saveToPersistentLog(String message) {
+        try {
+            FileWriter writer = new FileWriter(persistentLogFile, true); // append mode
+            writer.write(message + "\n");
+            writer.close();
+        } catch (Exception e) {
+            // Silent fail to avoid infinite logging loop
+        }
+    }
+    
+    private String getCurrentTimestamp() {
+        return new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+    }
 
     private String getPackageNameFromSettings() {
         SharedPreferences prefs = requireContext().getSharedPreferences("settings", 0);
@@ -93,15 +174,6 @@ public class HomeFragment extends Fragment {
 
     private void shareLogs() {
         try {
-            // Get the current log text
-            String logText = listener.getText().toString();
-            
-            // Create a temporary file
-            File logFile = new File(requireContext().getCacheDir(), "oclatestlog.txt");
-            FileWriter writer = new FileWriter(logFile);
-            writer.write(logText);
-            writer.close();
-            
             // Create the sharing intent
             Intent shareIntent = new Intent(Intent.ACTION_SEND);
             shareIntent.setType("text/plain");
@@ -110,7 +182,7 @@ public class HomeFragment extends Fragment {
             android.net.Uri fileUri = FileProvider.getUriForFile(
                 requireContext(),
                 "com.origin.launcher.fileprovider",
-                logFile
+                persistentLogFile
             );
             
             shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
@@ -136,39 +208,42 @@ public class HomeFragment extends Fragment {
                 }
                 
                 File cacheDexDir = new File(requireActivity().getCodeCacheDir(), "dex");
-                handleCacheCleaning(cacheDexDir, handler, listener);
+                handleCacheCleaning(cacheDexDir, handler);
                 
                 ApplicationInfo mcInfo = null;
                 try {
                     mcInfo = requireActivity().getPackageManager().getApplicationInfo(mcPackageName, PackageManager.GET_META_DATA);
                     final ApplicationInfo finalMcInfo = mcInfo;
-                    handler.post(() -> listener.append("\n-> Found Minecraft at: " + finalMcInfo.sourceDir));
+                    handler.post(() -> appendLogMessage("Found Minecraft at: " + finalMcInfo.sourceDir));
                 } catch(Exception e) {
-                    handler.post(() -> alertAndExit("Minecraft cant be found", "Perhaps you dont have it installed?"));
+                    handler.post(() -> {
+                        appendLogMessage("ERROR: Minecraft can't be found - " + e.getMessage());
+                        alertAndExit("Minecraft cant be found", "Perhaps you dont have it installed?");
+                    });
                     return;
                 };
                 
                 Object pathList = getPathList(requireActivity().getClassLoader());
-                processDexFiles(mcInfo, cacheDexDir, pathList, handler, listener, launcherDexName);
-                if (!processNativeLibraries(mcInfo, pathList, handler, listener)) {
+                processDexFiles(mcInfo, cacheDexDir, pathList, handler, launcherDexName);
+                if (!processNativeLibraries(mcInfo, pathList, handler)) {
                     return;
                 };
                 
-                handler.post(() -> listener.append("\n-> Launching Minecraft..."));
+                handler.post(() -> appendLogMessage("Launching Minecraft..."));
                 
                 // Final check before launching
                 if (isAdded()) {
                     launchMinecraft(mcInfo);
                 } else {
                     handler.post(() -> {
-                        listener.setText("Fragment no longer attached, cannot launch Minecraft");
+                        appendLogMessage("ERROR: Fragment no longer attached, cannot launch Minecraft");
                         mbl2_button.setEnabled(true);
                     });
                 }
             } catch (Exception e) {
                 String logMessage = e.getCause() != null ? e.getCause().toString() : e.toString();                
                 handler.post(() -> {
-                    listener.setText("Launching failed: " + logMessage);
+                    appendLogMessage("LAUNCH FAILED: " + logMessage);
                     mbl2_button.setEnabled(true);
                 });                
             }
@@ -176,16 +251,16 @@ public class HomeFragment extends Fragment {
     }
 
     @SuppressLint("SetTextI18n")
-    private void handleCacheCleaning(@NotNull File cacheDexDir, Handler handler, TextView listener) {
+    private void handleCacheCleaning(@NotNull File cacheDexDir, Handler handler) {
         if (cacheDexDir.exists() && cacheDexDir.isDirectory()) {
-            handler.post(() -> listener.setText("-> " + cacheDexDir.getAbsolutePath() + " not empty, do cleaning"));
+            handler.post(() -> appendLogMessage(cacheDexDir.getAbsolutePath() + " not empty, doing cleaning"));
             for (File file : Objects.requireNonNull(cacheDexDir.listFiles())) {
                 if (file.delete()) {
-                    handler.post(() -> listener.append("\n-> " + file.getName() + " deleted"));
+                    handler.post(() -> appendLogMessage(file.getName() + " deleted"));
                 }
             }
         } else {
-            handler.post(() -> listener.setText("-> " + cacheDexDir.getAbsolutePath() + " is empty, skip cleaning"));
+            handler.post(() -> appendLogMessage(cacheDexDir.getAbsolutePath() + " is empty, skip cleaning"));
         }
     }
 
@@ -195,16 +270,16 @@ public class HomeFragment extends Fragment {
         return pathListField.get(classLoader);
     }
 
-    private void processDexFiles(ApplicationInfo mcInfo, File cacheDexDir, @NotNull Object pathList, @NotNull Handler handler, TextView listener, String launcherDexName) throws Exception {
+    private void processDexFiles(ApplicationInfo mcInfo, File cacheDexDir, @NotNull Object pathList, @NotNull Handler handler, String launcherDexName) throws Exception {
         Method addDexPath = pathList.getClass().getDeclaredMethod("addDexPath", String.class, File.class);
         File launcherDex = new File(cacheDexDir, launcherDexName);
 
         copyFile(requireActivity().getAssets().open(launcherDexName), launcherDex);
-        handler.post(() -> listener.append("\n-> " + launcherDexName + " copied to " + launcherDex.getAbsolutePath()));
+        handler.post(() -> appendLogMessage(launcherDexName + " copied to " + launcherDex.getAbsolutePath()));
 
         if (launcherDex.setReadOnly()) {
             addDexPath.invoke(pathList, launcherDex.getAbsolutePath(), null);
-            handler.post(() -> listener.append("\n-> " + launcherDexName + " added to dex path list"));
+            handler.post(() -> appendLogMessage(launcherDexName + " added to dex path list"));
         } else {
             throw new Exception("Failed to set launcher dex as read-only");
         }
@@ -221,22 +296,25 @@ public class HomeFragment extends Fragment {
                         addDexPath.invoke(pathList, mcDex.getAbsolutePath(), null);
                         copiedDexes.add(dexName);
                     } else {
-                        handler.post(() -> listener.append("\n-> Warning: Failed to set " + dexName + " as read-only"));
+                        handler.post(() -> appendLogMessage("Warning: Failed to set " + dexName + " as read-only"));
                     }
                 }
             }
         } catch (Throwable th) {
-            handler.post(() -> listener.append("\n-> Warning: Error processing dex files: " + th.getMessage()));
+            handler.post(() -> appendLogMessage("Warning: Error processing dex files: " + th.getMessage()));
         }    
-        handler.post(() -> listener.append("\n-> Dex files " + copiedDexes.toString() + " copied and added to dex path list"));        
+        handler.post(() -> appendLogMessage("Dex files " + copiedDexes.toString() + " copied and added to dex path list"));        
     }
 
-    private boolean processNativeLibraries(ApplicationInfo mcInfo, @NotNull Object pathList, @NotNull Handler handler, TextView listener) throws Exception {
+    private boolean processNativeLibraries(ApplicationInfo mcInfo, @NotNull Object pathList, @NotNull Handler handler) throws Exception {
         FileInputStream inStream = new FileInputStream(getApkWithLibs(mcInfo));
         BufferedInputStream bufInStream = new BufferedInputStream(inStream);
         ZipInputStream inZipStream = new ZipInputStream(bufInStream);
         if (!checkLibCompatibility(inZipStream)) {
-            handler.post(() -> alertAndExit("Wrong minecraft architecture", "The minecraft you have installed does not support the same main architecture (" + Build.SUPPORTED_ABIS[0] + ") your device uses, mbloader cant work with it"));
+            handler.post(() -> {
+                appendLogMessage("ERROR: Wrong minecraft architecture - device uses " + Build.SUPPORTED_ABIS[0]);
+                alertAndExit("Wrong minecraft architecture", "The minecraft you have installed does not support the same main architecture (" + Build.SUPPORTED_ABIS[0] + ") your device uses, mbloader cant work with it");
+            });
             return false;
         } 		    
         Method addNativePath = pathList.getClass().getDeclaredMethod("addNativePath", Collection.class);
@@ -250,7 +328,7 @@ public class HomeFragment extends Fragment {
             libDirList.add(mcInfo.nativeLibraryDir);
         }
         addNativePath.invoke(pathList, libDirList);
-        handler.post(() -> listener.append("\n-> " + mcInfo.nativeLibraryDir + " added to native library directory path"));
+        handler.post(() -> appendLogMessage(mcInfo.nativeLibraryDir + " added to native library directory path"));
         return true;
     }
 
@@ -326,6 +404,9 @@ public class HomeFragment extends Fragment {
     private void launchMinecraft(ApplicationInfo mcInfo) throws ClassNotFoundException {
         Class<?> launcherClass = requireActivity().getClassLoader().loadClass("com.mojang.minecraftpe.Launcher");
         
+        // Log the successful launch attempt
+        appendLogMessage("Successfully loaded launcher class: " + launcherClass.getName());
+        
         // Create a new intent for Minecraft to ensure it launches in a new instance
         Intent mcActivity = new Intent(requireActivity(), launcherClass);
         mcActivity.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -335,12 +416,15 @@ public class HomeFragment extends Fragment {
             ArrayList<String> listSrcSplit = new ArrayList<>();
             Collections.addAll(listSrcSplit, mcInfo.splitSourceDirs);
             mcActivity.putExtra("MC_SPLIT_SRC", listSrcSplit);
+            appendLogMessage("Added split source dirs: " + listSrcSplit.size() + " entries");
         }
         
         // Add additional flags to ensure proper launch
         mcActivity.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
         
+        appendLogMessage("Starting Minecraft activity...");
         startActivity(mcActivity);
+        appendLogMessage("Minecraft launched successfully - finishing launcher activity");
         requireActivity().finish();
     }
 
@@ -359,6 +443,20 @@ public class HomeFragment extends Fragment {
             while ((bytesRead = input.read(buffer)) != -1) {
                 output.write(buffer, 0, bytesRead);
             }
+        }
+    }
+    
+    // Add method to clear logs if needed
+    public void clearLogs() {
+        logBuffer = new StringBuilder();
+        if (listener != null) {
+            listener.setText("");
+        }
+        try {
+            persistentLogFile.delete();
+            persistentLogFile.createNewFile();
+        } catch (Exception e) {
+            // Silent fail
         }
     }
 }
