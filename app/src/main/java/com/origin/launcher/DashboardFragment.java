@@ -212,8 +212,8 @@ public class DashboardFragment extends Fragment {
             moduleItems.add(new ModuleItem("Java Fancy Clouds", "Changes the clouds to Java Fancy Clouds", "java_clouds"));
             moduleItems.add(new ModuleItem("Java Cubemap", "improves the in-game cubemap bringing it abit lower", "java_cubemap"));
             moduleItems.add(new ModuleItem("Classic Vanilla skins", "Disables the newly added skins by mojang", "classic_skins"));
-            moduleItems.add(new ModuleItem("Side Shield", "Rotates your shield to the side for better experience", "side_shield"));
-            moduleItems.add(new ModuleItem("Entity Culling", "optimizes your fps by rendering only one side mesh", "entity_culling"));
+            moduleItems.add(new ModuleItem("No flipbook animation", "optimizes your fps by disabling block animation", "no_flipbook_animations"));
+            moduleItems.add(new ModuleItem("No Shadows", "optimizes your fps by disabling shadows", "no_shadows"));
             moduleItems.add(new ModuleItem("Xelo Title", "Changes the Start screen title image", "xelo_title"));
             moduleItems.add(new ModuleItem("White Block Outline", "changes the block selection outline to white", "white_block_outline"));
             
