@@ -1063,7 +1063,7 @@ private int getSystemIconOrFallback(int systemIcon) {
         SpannableString spannable = new SpannableString(text);
         
         // Use color resource instead of hardcoded color
-        int highlightColor = ContextCompat.getColor(requireContext(), android.R.color.holo_yellow_light);
+        int highlightColor = ContextCompat.getColor(requireContext(), android.R.color.holo_orange_light);
         
         for (int matchIndex : searchMatches) {
             spannable.setSpan(
