@@ -20,6 +20,7 @@ import android.os.Looper;
 public class DiscordRPC {
     private static final String TAG = "DiscordRPC";
     private static final String GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
+    private static final String APPLICATION_ID = "1403634750559752296"; // Your Application ID
     
     private static final String PREFS_NAME = "discord_rpc_prefs";
     private static final String KEY_ACCESS_TOKEN = "access_token";
@@ -276,6 +277,7 @@ public class DiscordRPC {
                 JSONObject activity = new JSONObject();
                 activity.put("name", "Xelo Client");
                 activity.put("type", 0); // Playing
+                activity.put("application_id", APPLICATION_ID); // Add Application ID
                 activity.put("details", currentDetails.isEmpty() ? "Using Xelo Client" : currentDetails);
                 activity.put("state", currentActivity.isEmpty() ? "Best MCPE Client" : currentActivity);
                 
@@ -284,13 +286,18 @@ public class DiscordRPC {
                 timestamps.put("start", startTime);
                 activity.put("timestamps", timestamps);
                 
-                // Add assets (you can customize these)
+                // Add assets with your uploaded image
                 JSONObject assets = new JSONObject();
-                assets.put("large_image", "https://cdn.discordapp.com/attachments/1152627555493498952/1405501188878761984/Untitled224_20250729210331.png?ex=689f0e7c&is=689dbcfc&hm=d06b346d167d2d7dabd1a0d3e3f366f71b0af79640bb1a82b95d9c068b23f2a3&"); // You'll need to upload this to Discord
+                assets.put("large_image", "untitled224_20250729210331"); // Your uploaded asset key (remove .png extension)
                 assets.put("large_text", "Xelo Client - Best MCPE Client");
+                // Optional: Add small image if you have one
+                // assets.put("small_image", "small_icon_key");
+                // assets.put("small_text", "Version 1.0");
                 activity.put("assets", assets);
                 
                 activities.put(activity);
+                
+                Log.d(TAG, "Created activity with image asset: untitled224_20250729210331");
             }
             
             return activities;
@@ -418,7 +425,7 @@ public class DiscordRPC {
                 
                 webSocket.send(presence.toString());
                 
-                Log.i(TAG, "Discord presence updated successfully");
+                Log.i(TAG, "Discord presence updated successfully with image asset");
                 
                 mainHandler.post(() -> {
                     if (callback != null) {
