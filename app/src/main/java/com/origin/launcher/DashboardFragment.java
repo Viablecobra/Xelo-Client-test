@@ -569,8 +569,8 @@ public class DashboardFragment extends Fragment {
             defaultConfig.put("java_cubemap", false);
             defaultConfig.put("classic_skins", false);
             defaultConfig.put("white_block_outline", false);
-            defaultConfig.put("side_shield", false);
-            defaultConfig.put("entity_culling", false);
+            defaultConfig.put("no_flipbook_animations", false);
+            defaultConfig.put("no_shadows", false);
             defaultConfig.put("night_vision", false);
             defaultConfig.put("xelo_title", true);
             
