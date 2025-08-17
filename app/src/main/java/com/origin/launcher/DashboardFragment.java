@@ -298,7 +298,7 @@ public class DashboardFragment extends Fragment {
     moduleDescriptionText.setText(module.getDescription());
     moduleDescriptionText.setTextSize(14f);
     moduleDescriptionText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurfaceVariant));
-    moduleDescriptionText.setAlpha(0.8f);
+    moduleDescriptionText.setAlpha(1.0f);
     
     LinearLayout.LayoutParams descParams = new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT,
