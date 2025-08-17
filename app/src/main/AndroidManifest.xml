@@ -219,7 +219,7 @@
             android:authorities="com.origin.launcher.fileprovider"
             android:grantUriPermissions="true">
             <meta-data
-                android:name="android.support.FILE_provider_PATHS"
+                android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_provider_paths"/>
         </provider>
         
