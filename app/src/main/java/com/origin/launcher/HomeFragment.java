@@ -68,7 +68,7 @@ public class HomeFragment extends Fragment {
         Handler handler = new Handler(Looper.getMainLooper());
         
         // Initialize persistent log file
-        persistentLogFile = new File(requireContext().getFilesDir(), "latestlog.txt");
+        persistentLogFile = new File(requireContext().getCacheDir(), "latestlog.txt");
         
         // Load existing logs if they exist
         loadExistingLogs();

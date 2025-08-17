@@ -360,69 +360,45 @@ public class DashboardFragment extends Fragment {
             Toast.makeText(requireContext(), "Config file not found. Creating default config first.", Toast.LENGTH_LONG).show();
             createDefaultConfig();
             
-            // Verify the file was created successfully
             if (!configFile.exists()) {
                 Toast.makeText(requireContext(), "Failed to create config file.", Toast.LENGTH_LONG).show();
                 return;
             }
         }
         
-        // Create file URI using FileProvider - try multiple approaches
-        Uri fileUri = null;
+        // Always copy to cache directory for sharing
+        File cacheDir = requireContext().getCacheDir();
+        File tempConfigFile = new File(cacheDir, "config.json");
         
-        // First approach: Use the actual config file directly
-        try {
-            fileUri = FileProvider.getUriForFile(
-                requireContext(), 
-                "com.origin.launcher.fileprovider", 
-                configFile
-            );
-        } catch (IllegalArgumentException e) {
-            // If that fails, copy to cache directory
-            File cacheDir = requireContext().getCacheDir();
-            File tempConfigFile = new File(cacheDir, "origin_config.json");
-            
-            // Delete existing temp file if it exists
-            if (tempConfigFile.exists()) {
-                tempConfigFile.delete();
-            }
-            
-            // Copy the actual config file to cache directory
-            try (FileInputStream fis = new FileInputStream(configFile);
-                 FileOutputStream fos = new FileOutputStream(tempConfigFile)) {
-                
-                byte[] buffer = new byte[1024];
-                int length;
-                while ((length = fis.read(buffer)) > 0) {
-                    fos.write(buffer, 0, length);
-                }
-                fos.flush();
-            }
-            
-            // Verify the temp file was created and has content
-            if (!tempConfigFile.exists() || tempConfigFile.length() == 0) {
-                Toast.makeText(requireContext(), "Failed to prepare config file for sharing.", Toast.LENGTH_LONG).show();
-                return;
-            }
-            
-            // Create file URI for the temp file
-            try {
-                fileUri = FileProvider.getUriForFile(
-                    requireContext(), 
-                    "com.origin.launcher.fileprovider", 
-                    tempConfigFile
-                );
-            } catch (IllegalArgumentException e2) {
-                Toast.makeText(requireContext(), "Error: FileProvider configuration issue. Check file_provider_paths.xml", Toast.LENGTH_LONG).show();
-                e2.printStackTrace();
-                return;
-            }
+        // Delete existing temp file if it exists
+        if (tempConfigFile.exists()) {
+            tempConfigFile.delete();
         }
         
-        if (fileUri == null) {
-            Toast.makeText(requireContext(), "Failed to create file URI for sharing.", Toast.LENGTH_LONG).show();
+        // Copy the actual config file to cache directory
+        try (FileInputStream fis = new FileInputStream(configFile);
+             FileOutputStream fos = new FileOutputStream(tempConfigFile)) {
+            
+            byte[] buffer = new byte[1024];
+            int length;
+            while ((length = fis.read(buffer)) > 0) {
+                fos.write(buffer, 0, length);
+            }
+            fos.flush();
+        }
+        
+        // Verify the temp file was created and has content
+        if (!tempConfigFile.exists() || tempConfigFile.length() == 0) {
+            Toast.makeText(requireContext(), "Failed to prepare config file for sharing.", Toast.LENGTH_LONG).show();
             return;
         }
+        
+        // Create file URI for the temp file (using cache path)
+        Uri fileUri = FileProvider.getUriForFile(
+            requireContext(), 
+            "com.origin.launcher.fileprovider", 
+            tempConfigFile
+        );
         
         // Create share intent
         Intent shareIntent = new Intent(Intent.ACTION_SEND);
