@@ -398,56 +398,68 @@ public class DashboardFragment extends Fragment {
                 });
             }
             
-private void setModuleIcon(ModuleItem module) {
-    String configKey = module.getConfigKey();
-    int iconRes = R.drawable.wrench; // Default fallback icon
-    
-    try {
-        switch (configKey) {
-            case "night_vision":
-                // Try system icon, fallback to default if not available
-                iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_view);
-                break;
-            case "Nofog":
-                iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_view);
-                break;
-            case "particles_disabler":
-                iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_close_clear_cancel);
-                break;
-            case "java_clouds":
-            case "java_cubemap":
-                iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_compass);
-                break;
-            case "classic_skins":
-                iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_gallery);
-                break;
-            case "no_flipbook_animations":
-            case "no_shadows":
-                iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_manage);
-                break;
-            case "xelo_title":
-                iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_edit);
-                break;
-            case "white_block_outline":
-                iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_crop);
-                break;
-            default:
-                iconRes = R.drawable.wrench;
-                break;
-        }
-        
-        moduleIcon.setImageResource(iconRes);
-        
-    } catch (Exception e) {
-        // If any icon fails to load, use the wrench icon
-        try {
-            moduleIcon.setImageResource(R.drawable.wrench);
-        } catch (Exception fallbackException) {
-            // If even wrench icon fails, use a simple system icon
-            moduleIcon.setImageResource(android.R.drawable.ic_menu_preferences);
-        }
-    }
-}
+            private void setModuleIcon(ModuleItem module) {
+                String configKey = module.getConfigKey();
+                int iconRes = R.drawable.wrench; // Default fallback icon
+                
+                try {
+                    switch (configKey) {
+                        case "night_vision":
+                            // Try system icon, fallback to default if not available
+                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_view);
+                            break;
+                        case "Nofog":
+                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_view);
+                            break;
+                        case "particles_disabler":
+                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_close_clear_cancel);
+                            break;
+                        case "java_clouds":
+                        case "java_cubemap":
+                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_compass);
+                            break;
+                        case "classic_skins":
+                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_gallery);
+                            break;
+                        case "no_flipbook_animations":
+                        case "no_shadows":
+                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_manage);
+                            break;
+                        case "xelo_title":
+                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_edit);
+                            break;
+                        case "white_block_outline":
+                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_crop);
+                            break;
+                        default:
+                            iconRes = R.drawable.wrench;
+                            break;
+                    }
+                    
+                    moduleIcon.setImageResource(iconRes);
+                    
+                } catch (Exception e) {
+                    // If any icon fails to load, use the wrench icon
+                    try {
+                        moduleIcon.setImageResource(R.drawable.wrench);
+                    } catch (Exception fallbackException) {
+                        // If even wrench icon fails, use a simple system icon
+                        moduleIcon.setImageResource(android.R.drawable.ic_menu_preferences);
+                    }
+                }
+            }
+
+            // Helper method to safely try system icons
+            private int getSystemIconOrFallback(int systemIcon) {
+                try {
+                    itemView.getContext().getResources().getDrawable(systemIcon);
+                    return systemIcon;
+                } catch (Exception e) {
+                    return R.drawable.wrench;
+                }
+            }
+        } 
+    } 
 
 // Helper method to safely try system icons
 private int getSystemIconOrFallback(int systemIcon) {
