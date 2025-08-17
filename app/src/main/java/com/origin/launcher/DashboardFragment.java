@@ -243,7 +243,6 @@ public class DashboardFragment extends Fragment {
         }
     }
     
-    // NEW METHOD: Create individual module views
     private View createModuleView(ModuleItem module) {
     MaterialCardView moduleCard = new MaterialCardView(getContext());
     
@@ -255,7 +254,7 @@ public class DashboardFragment extends Fragment {
     cardParams.setMargins(16, 8, 16, 8);
     moduleCard.setLayoutParams(cardParams);
     
-    moduleCard.setRadius(30f);
+    moduleCard.setRadius(28f);
     moduleCard.setCardElevation(2f);
     moduleCard.setStrokeWidth(1);
     
@@ -319,7 +318,7 @@ public class DashboardFragment extends Fragment {
     moduleDescriptionText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurfaceVariant));
     moduleDescriptionText.setAlpha(0.7f);
     moduleDescriptionText.setMaxLines(1);
-    moduleDescriptionText.setEllipsize(TextUtils.TruncateAt.END);
+    moduleDescriptionText.setEllipsize(android.text.TextUtils.TruncateAt.END);
     
     LinearLayout.LayoutParams descParams = new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT,
