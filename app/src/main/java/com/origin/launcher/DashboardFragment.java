@@ -242,89 +242,96 @@ public class DashboardFragment extends Fragment {
     
     // NEW METHOD: Create individual module views
     private View createModuleView(ModuleItem module) {
-        // Create a CardView for each module
-        MaterialCardView moduleCard = new MaterialCardView(getContext());
-        
-        // Set layout parameters (width: match_parent, height: wrap_content, margins)
-        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        cardParams.setMargins(1, 8, 1, 8); // Add some spacing between modules
-        moduleCard.setLayoutParams(cardParams);
-        
-        // Set card properties
-        moduleCard.setRadius(21f);
-        moduleCard.setCardElevation(4f);
-        moduleCard.setStrokeWidth(1);
-        
-        // Set card colors (you may need to adjust these based on your theme)
-        moduleCard.setCardBackgroundColor(ContextCompat.getColor(getContext(), R.color.surface));
-        moduleCard.setStrokeColor(ContextCompat.getColor(getContext(), R.color.outline));
-        
-        // Create inner layout for module content
-        LinearLayout moduleContent = new LinearLayout(getContext());
-        moduleContent.setOrientation(LinearLayout.VERTICAL);
-        moduleContent.setPadding(16, 16, 16, 16);
-        
-        // Create top row with name and switch
-        LinearLayout topRow = new LinearLayout(getContext());
-        topRow.setOrientation(LinearLayout.HORIZONTAL);
-        topRow.setLayoutParams(new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ));
-        
-        // Add module name
-        TextView moduleNameText = new TextView(getContext());
-        moduleNameText.setText(module.getName());
-        moduleNameText.setTextSize(16f);
-        moduleNameText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurface));
-        moduleNameText.setLayoutParams(new LinearLayout.LayoutParams(
-            0,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            1f
-        ));
-        
-        // Add toggle switch
-        MaterialSwitch moduleSwitch = new MaterialSwitch(getContext());
-        moduleSwitch.setLayoutParams(new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ));
-        
-        // Set switch state and listener
-        moduleSwitch.setChecked(module.isEnabled());
-        moduleSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            module.setEnabled(isChecked);
-            onModuleToggle(module, isChecked);
-        });
-        
-        // Add views to top row
-        topRow.addView(moduleNameText);
-        topRow.addView(moduleSwitch);
-        
-        // Add description
-        TextView moduleDescriptionText = new TextView(getContext());
-        moduleDescriptionText.setText(module.getDescription());
-        moduleDescriptionText.setTextSize(14f);
-        moduleDescriptionText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurfaceVariant));
-        LinearLayout.LayoutParams descParams = new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        descParams.setMargins(0, 8, 0, 0);
-        moduleDescriptionText.setLayoutParams(descParams);
-        
-        // Add views to module content
-        moduleContent.addView(topRow);
-        moduleContent.addView(moduleDescriptionText);
-        
-        // Add content to card
-        moduleCard.addView(moduleContent);
-        
-        return moduleCard;
-    }
+    MaterialCardView moduleCard = new MaterialCardView(getContext());
+    
+    LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT,
+        LinearLayout.LayoutParams.WRAP_CONTENT
+    );
+    cardParams.setMargins(5, 12, 5, 12);
+    moduleCard.setLayoutParams(cardParams);
+    
+    moduleCard.setRadius(28f);
+    moduleCard.setCardElevation(2f);
+    moduleCard.setStrokeWidth(1);
+    
+    moduleCard.setCardBackgroundColor(ContextCompat.getColor(getContext(), R.color.surface));
+    moduleCard.setStrokeColor(ContextCompat.getColor(getContext(), R.color.outline));
+    
+    LinearLayout mainLayout = new LinearLayout(getContext());
+    mainLayout.setOrientation(LinearLayout.HORIZONTAL);
+    mainLayout.setGravity(Gravity.CENTER_VERTICAL);
+    mainLayout.setPadding(20, 20, 20, 20);
+    
+    ImageView iconView = new ImageView(getContext());
+    iconView.setImageResource(R.drawable.wrench);
+    iconView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+    
+    LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(
+        (int) (24 * getResources().getDisplayMetrics().density),
+        (int) (24 * getResources().getDisplayMetrics().density)
+    );
+    iconParams.setMarginEnd((int) (16 * getResources().getDisplayMetrics().density));
+    iconView.setLayoutParams(iconParams);
+    
+    iconView.setColorFilter(ContextCompat.getColor(getContext(), R.color.onSurface));
+    
+    LinearLayout contentLayout = new LinearLayout(getContext());
+    contentLayout.setOrientation(LinearLayout.VERTICAL);
+    contentLayout.setLayoutParams(new LinearLayout.LayoutParams(
+        0,
+        LinearLayout.LayoutParams.WRAP_CONTENT,
+        1f
+    ));
+    
+    TextView moduleNameText = new TextView(getContext());
+    moduleNameText.setText(module.getName());
+    moduleNameText.setTextSize(18f);
+    moduleNameText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurface));
+    moduleNameText.setTypeface(null, Typeface.BOLD);
+    moduleNameText.setLayoutParams(new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT,
+        LinearLayout.LayoutParams.WRAP_CONTENT
+    ));
+    
+    TextView moduleDescriptionText = new TextView(getContext());
+    moduleDescriptionText.setText(module.getDescription());
+    moduleDescriptionText.setTextSize(14f);
+    moduleDescriptionText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurfaceVariant));
+    moduleDescriptionText.setAlpha(0.8f);
+    
+    LinearLayout.LayoutParams descParams = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT,
+        LinearLayout.LayoutParams.WRAP_CONTENT
+    );
+    descParams.setMargins(0, (int) (4 * getResources().getDisplayMetrics().density), 0, 0);
+    moduleDescriptionText.setLayoutParams(descParams);
+    
+    contentLayout.addView(moduleNameText);
+    contentLayout.addView(moduleDescriptionText);
+    
+    MaterialSwitch moduleSwitch = new MaterialSwitch(getContext());
+    LinearLayout.LayoutParams switchParams = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.WRAP_CONTENT,
+        LinearLayout.LayoutParams.WRAP_CONTENT
+    );
+    switchParams.setMarginStart((int) (16 * getResources().getDisplayMetrics().density));
+    moduleSwitch.setLayoutParams(switchParams);
+    
+    moduleSwitch.setChecked(module.isEnabled());
+    moduleSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+        module.setEnabled(isChecked);
+        onModuleToggle(module, isChecked);
+    });
+    
+    mainLayout.addView(iconView);
+    mainLayout.addView(contentLayout);
+    mainLayout.addView(moduleSwitch);
+    
+    moduleCard.addView(mainLayout);
+    
+    return moduleCard;
+}
     
     private void setupConfigButtons(View view) {
         // Find the existing buttons from XML
