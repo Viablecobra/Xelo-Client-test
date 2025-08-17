@@ -247,14 +247,15 @@ public class DashboardFragment extends Fragment {
     private View createModuleView(ModuleItem module) {
     MaterialCardView moduleCard = new MaterialCardView(getContext());
     
+    int cardHeight = (int) (80 * getResources().getDisplayMetrics().density);
     LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT,
-        LinearLayout.LayoutParams.WRAP_CONTENT
+        cardHeight
     );
-    cardParams.setMargins(5, 12, 5, 12);
+    cardParams.setMargins(16, 8, 16, 8);
     moduleCard.setLayoutParams(cardParams);
     
-    moduleCard.setRadius(28f);
+    moduleCard.setRadius(30f);
     moduleCard.setCardElevation(2f);
     moduleCard.setStrokeWidth(1);
     
@@ -262,74 +263,74 @@ public class DashboardFragment extends Fragment {
     moduleCard.setStrokeColor(ContextCompat.getColor(getContext(), R.color.outline));
     
     LinearLayout mainLayout = new LinearLayout(getContext());
-    mainLayout.setOrientation(LinearLayout.HORIZONTAL);
-    mainLayout.setGravity(Gravity.CENTER_VERTICAL);
-    mainLayout.setPadding(20, 20, 20, 20);
+    mainLayout.setOrientation(LinearLayout.VERTICAL);
+    mainLayout.setPadding(18, 16, 18, 16);
+    
+    LinearLayout topRow = new LinearLayout(getContext());
+    topRow.setOrientation(LinearLayout.HORIZONTAL);
+    topRow.setGravity(Gravity.CENTER_VERTICAL);
+    topRow.setLayoutParams(new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT,
+        LinearLayout.LayoutParams.WRAP_CONTENT
+    ));
     
     ImageView iconView = new ImageView(getContext());
     iconView.setImageResource(R.drawable.wrench);
     iconView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
     
     LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(
-        (int) (24 * getResources().getDisplayMetrics().density),
-        (int) (24 * getResources().getDisplayMetrics().density)
+        (int) (20 * getResources().getDisplayMetrics().density),
+        (int) (20 * getResources().getDisplayMetrics().density)
     );
-    iconParams.setMarginEnd((int) (16 * getResources().getDisplayMetrics().density));
+    iconParams.setMarginEnd((int) (12 * getResources().getDisplayMetrics().density));
     iconView.setLayoutParams(iconParams);
-    
     iconView.setColorFilter(ContextCompat.getColor(getContext(), R.color.onSurface));
     
-    LinearLayout contentLayout = new LinearLayout(getContext());
-    contentLayout.setOrientation(LinearLayout.VERTICAL);
-    contentLayout.setLayoutParams(new LinearLayout.LayoutParams(
+    TextView moduleNameText = new TextView(getContext());
+    moduleNameText.setText(module.getName());
+    moduleNameText.setTextSize(16f);
+    moduleNameText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurface));
+    moduleNameText.setTypeface(null, Typeface.BOLD);
+    moduleNameText.setLayoutParams(new LinearLayout.LayoutParams(
         0,
         LinearLayout.LayoutParams.WRAP_CONTENT,
         1f
     ));
-    
-    TextView moduleNameText = new TextView(getContext());
-    moduleNameText.setText(module.getName());
-    moduleNameText.setTextSize(18f);
-    moduleNameText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurface));
-    moduleNameText.setTypeface(null, Typeface.BOLD);
-    moduleNameText.setLayoutParams(new LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT,
-        LinearLayout.LayoutParams.WRAP_CONTENT
-    ));
-    
-    TextView moduleDescriptionText = new TextView(getContext());
-    moduleDescriptionText.setText(module.getDescription());
-    moduleDescriptionText.setTextSize(14f);
-    moduleDescriptionText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurfaceVariant));
-    moduleDescriptionText.setAlpha(1.0f);
-    
-    LinearLayout.LayoutParams descParams = new LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT,
-        LinearLayout.LayoutParams.WRAP_CONTENT
-    );
-    descParams.setMargins(0, (int) (4 * getResources().getDisplayMetrics().density), 0, 0);
-    moduleDescriptionText.setLayoutParams(descParams);
-    
-    contentLayout.addView(moduleNameText);
-    contentLayout.addView(moduleDescriptionText);
     
     MaterialSwitch moduleSwitch = new MaterialSwitch(getContext());
     LinearLayout.LayoutParams switchParams = new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.WRAP_CONTENT,
         LinearLayout.LayoutParams.WRAP_CONTENT
     );
-    switchParams.setMarginStart((int) (16 * getResources().getDisplayMetrics().density));
     moduleSwitch.setLayoutParams(switchParams);
-    
     moduleSwitch.setChecked(module.isEnabled());
     moduleSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
         module.setEnabled(isChecked);
         onModuleToggle(module, isChecked);
     });
     
-    mainLayout.addView(iconView);
-    mainLayout.addView(contentLayout);
-    mainLayout.addView(moduleSwitch);
+    topRow.addView(iconView);
+    topRow.addView(moduleNameText);
+    topRow.addView(moduleSwitch);
+    
+    TextView moduleDescriptionText = new TextView(getContext());
+    moduleDescriptionText.setText(module.getDescription());
+    moduleDescriptionText.setTextSize(13f);
+    moduleDescriptionText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurfaceVariant));
+    moduleDescriptionText.setAlpha(0.7f);
+    moduleDescriptionText.setMaxLines(1);
+    moduleDescriptionText.setEllipsize(TextUtils.TruncateAt.END);
+    
+    LinearLayout.LayoutParams descParams = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT,
+        LinearLayout.LayoutParams.WRAP_CONTENT
+    );
+    descParams.setMargins((int) (32 * getResources().getDisplayMetrics().density), 
+                         (int) (4 * getResources().getDisplayMetrics().density), 0, 0);
+    moduleDescriptionText.setLayoutParams(descParams);
+    
+    mainLayout.addView(topRow);
+    mainLayout.addView(moduleDescriptionText);
     
     moduleCard.addView(mainLayout);
     
@@ -414,8 +415,8 @@ public class DashboardFragment extends Fragment {
         Intent shareIntent = new Intent(Intent.ACTION_SEND);
         shareIntent.setType("application/json");
         shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
-        shareIntent.putExtra(Intent.EXTRA_SUBJECT, "Origin Launcher Config");
-        shareIntent.putExtra(Intent.EXTRA_TEXT, "Origin Launcher configuration file");
+        shareIntent.putExtra(Intent.EXTRA_SUBJECT, "Xelo Client Config");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, "Xelo Client configuration file");
         shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         
         // Verify that there are apps that can handle this intent
