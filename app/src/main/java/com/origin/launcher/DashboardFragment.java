@@ -287,7 +287,7 @@ public class DashboardFragment extends Fragment {
     
     TextView moduleNameText = new TextView(getContext());
     moduleNameText.setText(module.getName());
-    moduleNameText.setTextSize(16f);
+    moduleNameText.setTextSize(17f);
     moduleNameText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurface));
     moduleNameText.setTypeface(null, Typeface.BOLD);
     moduleNameText.setLayoutParams(new LinearLayout.LayoutParams(
@@ -314,7 +314,7 @@ public class DashboardFragment extends Fragment {
     
     TextView moduleDescriptionText = new TextView(getContext());
     moduleDescriptionText.setText(module.getDescription());
-    moduleDescriptionText.setTextSize(13f);
+    moduleDescriptionText.setTextSize(14f);
     moduleDescriptionText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurfaceVariant));
     moduleDescriptionText.setAlpha(0.7f);
     moduleDescriptionText.setMaxLines(1);
@@ -325,7 +325,7 @@ public class DashboardFragment extends Fragment {
         LinearLayout.LayoutParams.WRAP_CONTENT
     );
     descParams.setMargins((int) (32 * getResources().getDisplayMetrics().density), 
-                         (int) (4 * getResources().getDisplayMetrics().density), 0, 0);
+                         (int) (2 * getResources().getDisplayMetrics().density), 0, 0);
     moduleDescriptionText.setLayoutParams(descParams);
     
     mainLayout.addView(topRow);
