@@ -19,13 +19,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -48,7 +45,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.ref.WeakReference;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
@@ -57,13 +54,11 @@ import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 public class DashboardFragment extends Fragment {
-    private File currentRootDir = null;
-    
-    // Activity Result Launchers
-    private ActivityResultLauncher<Intent> importBackupLauncher;
-    private ActivityResultLauncher<Intent> exportBackupLauncher;
-    private ActivityResultLauncher<Intent> importConfigLauncher;
-    private ActivityResultLauncher<String[]> permissionLauncher;
+    private File currentRootDir = null; // Store the found root directory
+    private static final int IMPORT_REQUEST_CODE = 1002;
+    private static final int EXPORT_REQUEST_CODE = 1003;
+    private static final int IMPORT_CONFIG_REQUEST_CODE = 1004;
+    private static final int EXPORT_CONFIG_REQUEST_CODE = 1005;
     
     // Options.txt editor variables
     private File optionsFile;
@@ -75,18 +70,16 @@ public class DashboardFragment extends Fragment {
     private TextInputLayout searchInputLayout;
     private TextInputEditText searchEditText;
     private MaterialButton editOptionsButton;
-    private SafeTextWatcher optionsTextWatcher;
     
     // Search functionality variables
     private String currentSearchTerm = "";
     private List<Integer> searchMatches = new ArrayList<>();
     private int currentMatchIndex = -1;
-    private boolean isUpdatingSearchHighlight = false;
     
-    // Modules variables
+    // Modules variables - UPDATED FOR SCROLLVIEW
     private File configFile;
-    private RecyclerView modulesRecyclerView;
-    private ModuleAdapter moduleAdapter;
+    private ScrollView modulesScrollView;
+    private LinearLayout modulesContainer;
     private List<ModuleItem> moduleItems;
     
     // Module data class
@@ -100,9 +93,10 @@ public class DashboardFragment extends Fragment {
             this.name = name;
             this.description = description;
             this.configKey = configKey;
-            this.enabled = false;
+            this.enabled = false; // Default to disabled
         }
         
+        // Getters and setters
         public String getName() { return name; }
         public String getDescription() { return description; }
         public String getConfigKey() { return configKey; }
@@ -115,96 +109,6 @@ public class DashboardFragment extends Fragment {
         void onToggle(ModuleItem module, boolean isEnabled);
     }
     
-    // Safe TextWatcher to prevent memory leaks
-    private static class SafeTextWatcher implements TextWatcher {
-        private final WeakReference<DashboardFragment> fragmentRef;
-        
-        public SafeTextWatcher(DashboardFragment fragment) {
-            this.fragmentRef = new WeakReference<>(fragment);
-        }
-        
-        @Override
-        public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-        
-        @Override
-        public void onTextChanged(CharSequence s, int start, int before, int count) {}
-        
-        @Override
-        public void afterTextChanged(Editable s) {
-            DashboardFragment fragment = fragmentRef.get();
-            if (fragment != null && !fragment.isUpdatingSearchHighlight) {
-                fragment.handleTextChanged(s.toString());
-            }
-        }
-    }
-    
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        initializeActivityResultLaunchers();
-    }
-    
-    private void initializeActivityResultLaunchers() {
-        importBackupLauncher = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> {
-                if (result.getResultCode() == requireActivity().RESULT_OK && result.getData() != null) {
-                    Uri zipUri = result.getData().getData();
-                    if (zipUri != null) {
-                        importBackup(zipUri);
-                    }
-                }
-            }
-        );
-        
-        exportBackupLauncher = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> {
-                if (result.getResultCode() == requireActivity().RESULT_OK && result.getData() != null) {
-                    Uri saveUri = result.getData().getData();
-                    if (saveUri != null && currentRootDir != null) {
-                        createBackupAtLocation(saveUri, currentRootDir);
-                    }
-                }
-            }
-        );
-        
-        importConfigLauncher = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> {
-                if (result.getResultCode() == requireActivity().RESULT_OK && result.getData() != null) {
-                    Uri configUri = result.getData().getData();
-                    if (configUri != null) {
-                        importConfig(configUri);
-                    }
-                }
-            }
-        );
-        
-        permissionLauncher = registerForActivityResult(
-            new ActivityResultContracts.RequestMultiplePermissions(),
-            result -> {
-                boolean granted = false;
-                for (Boolean permission : result.values()) {
-                    if (permission) {
-                        granted = true;
-                        break;
-                    }
-                }
-                
-                if (granted) {
-                    if (currentRootDir != null) {
-                        openSaveLocationChooser();
-                    } else {
-                        showToast("No Minecraft data found to backup");
-                    }
-                } else {
-                    showToast("Storage permission is required to backup files");
-                }
-            }
-        );
-    }
-    
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_dashboard, container, false);
@@ -215,7 +119,46 @@ public class DashboardFragment extends Fragment {
         
         if (folderRecyclerView != null) {
             folderRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-            setupFolderDisplay(folderRecyclerView);
+
+            // File management root - try multiple possible paths
+            String[] possiblePaths = {
+                "/storage/emulated/0/Android/data/com.origin.launcher/files/games/com.mojang/",
+                "/storage/emulated/0/games/com.mojang/",
+                "/storage/emulated/0/Android/data/com.mojang.minecraftpe/files/games/com.mojang/",
+                getContext().getExternalFilesDir(null) + "/games/com.mojang/"
+            };
+            
+            File rootDir = null;
+            String rootPath = null;
+            
+            for (String path : possiblePaths) {
+                File testDir = new File(path);
+                if (testDir.exists() && testDir.isDirectory()) {
+                    File[] testFiles = testDir.listFiles();
+                    if (testFiles != null && testFiles.length > 0) {
+                        rootDir = testDir;
+                        rootPath = path;
+                        currentRootDir = testDir; // Store for later use
+                        break;
+                    }
+                }
+            }
+            
+            List<String> folderNames = new ArrayList<>();
+            if (rootDir != null && rootDir.exists() && rootDir.isDirectory()) {
+                File[] files = rootDir.listFiles();
+                if (files != null) {
+                    for (File file : files) {
+                        if (file.isDirectory()) {
+                            folderNames.add(file.getName());
+                        }
+                    }
+                }
+            } else {
+                folderNames.add("No Minecraft data found");
+            }
+            FolderAdapter adapter = new FolderAdapter(folderNames);
+            folderRecyclerView.setAdapter(adapter);
         }
 
         if (backupButton != null) {
@@ -224,7 +167,7 @@ public class DashboardFragment extends Fragment {
                     if (currentRootDir != null) {
                         openSaveLocationChooser();
                     } else {
-                        showToast("No Minecraft data found to backup");
+                        Toast.makeText(requireContext(), "No Minecraft data found to backup", Toast.LENGTH_LONG).show();
                     }
                 } else {
                     requestStoragePermissions();
@@ -242,241 +185,153 @@ public class DashboardFragment extends Fragment {
             });
         }
 
+        // Initialize modules
         initializeModules(view);
+        
+        // Initialize options.txt editor
         initializeOptionsEditor(view);
 
         return view;
     }
-    
-    private void setupFolderDisplay(RecyclerView folderRecyclerView) {
-        // Find Minecraft data directory
-        String[] possiblePaths = {
-            "/storage/emulated/0/Android/data/com.origin.launcher/files/games/com.mojang/",
-            "/storage/emulated/0/games/com.mojang/",
-            "/storage/emulated/0/Android/data/com.mojang.minecraftpe/files/games/com.mojang/"
-        };
-        
-        // Add dynamic path as last option
-        if (getContext() != null) {
-            String dynamicPath = getContext().getExternalFilesDir(null) + "/games/com.mojang/";
-            String[] allPaths = new String[possiblePaths.length + 1];
-            System.arraycopy(possiblePaths, 0, allPaths, 0, possiblePaths.length);
-            allPaths[allPaths.length - 1] = dynamicPath;
-            possiblePaths = allPaths;
-        }
-        
-        File rootDir = null;
-        for (String path : possiblePaths) {
-            File testDir = new File(path);
-            if (testDir.exists() && testDir.isDirectory()) {
-                File[] testFiles = testDir.listFiles();
-                if (testFiles != null && testFiles.length > 0) {
-                    rootDir = testDir;
-                    currentRootDir = testDir;
-                    break;
-                }
-            }
-        }
-        
-        List<String> folderNames = new ArrayList<>();
-        if (rootDir != null && rootDir.exists() && rootDir.isDirectory()) {
-            File[] files = rootDir.listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    if (file.isDirectory()) {
-                        folderNames.add(file.getName());
-                    }
-                }
-            }
-        } else {
-            folderNames.add("No Minecraft data found");
-        }
-        
-        FolderAdapter adapter = new FolderAdapter(folderNames);
-        folderRecyclerView.setAdapter(adapter);
-    }
 
     private void initializeModules(View view) {
-        if (getContext() == null) return;
-        
+        // Initialize config file path
         configFile = new File(getContext().getExternalFilesDir(null), "origin_mods/config.json");
-        modulesRecyclerView = view.findViewById(R.id.modulesRecyclerView);
         
-        if (modulesRecyclerView != null) {
-            modulesRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-            modulesRecyclerView.setHasFixedSize(true);
-            
+        // Get ScrollView and container - UPDATED
+        modulesScrollView = view.findViewById(R.id.modulesScrollView);
+        modulesContainer = view.findViewById(R.id.modulesContainer);
+        
+        if (modulesContainer != null) {
             // Initialize module items
             moduleItems = new ArrayList<>();
-            moduleItems.add(new ModuleItem("No Hurt Cam", "Allows you to toggle the in-game hurt cam", "Nohurtcam"));
-            moduleItems.add(new ModuleItem("Fullbright", "Course lets u see in the dark (Doesn't work with No Fog)", "night_vision"));
-            moduleItems.add(new ModuleItem("No Fog", "Allows you to toggle the in-game fog (Doesn't work with Fullbright)", "Nofog"));
-            moduleItems.add(new ModuleItem("Particles Disabler", "Allows you to toggle the in-game particles", "particles_disabler"));
+            moduleItems.add(new ModuleItem("no hurt cam", "allows you to toggle the in-game hurt cam", "Nohurtcam"));
+            moduleItems.add(new ModuleItem("Fullbright", "(Doesnt work with No fog) ofcouse lets u see in the dark moron", "night_vision"));
+            moduleItems.add(new ModuleItem("No Fog", "(Doesnt work with fullbright) allows you to toggle the in-game fog", "Nofog"));
+            moduleItems.add(new ModuleItem("Particles Disabler", "allows you to toggle the in-game particles", "particles_disabler"));
             moduleItems.add(new ModuleItem("Java Fancy Clouds", "Changes the clouds to Java Fancy Clouds", "java_clouds"));
-            moduleItems.add(new ModuleItem("Java Cubemap", "Improves the in-game cubemap bringing it a bit lower", "java_cubemap"));
-            moduleItems.add(new ModuleItem("Classic Vanilla Skins", "Disables the newly added skins by Mojang", "classic_skins"));
-            moduleItems.add(new ModuleItem("No Flipbook Animation", "Optimizes your FPS by disabling block animation", "no_flipbook_animations"));
-            moduleItems.add(new ModuleItem("No Shadows", "Optimizes your FPS by disabling shadows", "no_shadows"));
+            moduleItems.add(new ModuleItem("Java Cubemap", "improves the in-game cubemap bringing it abit lower", "java_cubemap"));
+            moduleItems.add(new ModuleItem("Classic Vanilla skins", "Disables the newly added skins by mojang", "classic_skins"));
+            moduleItems.add(new ModuleItem("No flipbook animation", "optimizes your fps by disabling block animation", "no_flipbook_animations"));
+            moduleItems.add(new ModuleItem("No Shadows", "optimizes your fps by disabling shadows", "no_shadows"));
             moduleItems.add(new ModuleItem("Xelo Title", "Changes the Start screen title image", "xelo_title"));
-            moduleItems.add(new ModuleItem("White Block Outline", "Changes the block selection outline to white", "white_block_outline"));
+            moduleItems.add(new ModuleItem("White Block Outline", "changes the block selection outline to white", "white_block_outline"));
             
+            // Load current config state and populate modules
             loadModuleStates();
-            
-            moduleAdapter = new ModuleAdapter(moduleItems, this::onModuleToggle);
-            modulesRecyclerView.setAdapter(moduleAdapter);
+            populateModules();
         }
         
+        // Set up the existing XML config buttons
         setupConfigButtons(view);
     }
     
-    // Module Adapter class
-    private static class ModuleAdapter extends RecyclerView.Adapter<ModuleAdapter.ModuleViewHolder> {
-        private List<ModuleItem> modules;
-        private ModuleToggleListener toggleListener;
+    // NEW METHOD: Populate modules in ScrollView
+    private void populateModules() {
+        if (modulesContainer == null) return;
         
-        public ModuleAdapter(List<ModuleItem> modules, ModuleToggleListener listener) {
-            this.modules = modules;
-            this.toggleListener = listener;
+        // Clear existing modules
+        modulesContainer.removeAllViews();
+        
+        // Add each module as a card view
+        for (ModuleItem module : moduleItems) {
+            View moduleView = createModuleView(module);
+            modulesContainer.addView(moduleView);
         }
-        
-        @NonNull
-        @Override
-        public ModuleViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.item_module, parent, false);
-            return new ModuleViewHolder(view);
-        }
-        
-        @Override
-        public void onBindViewHolder(@NonNull ModuleViewHolder holder, int position) {
-            ModuleItem module = modules.get(position);
-            holder.bind(module, toggleListener);
-        }
-        
-        @Override
-        public int getItemCount() {
-            return modules.size();
-        }
-        
-        public void updateModules() {
-            notifyDataSetChanged();
-        }
-        
-        // ViewHolder class
-        static class ModuleViewHolder extends RecyclerView.ViewHolder {
-            private TextView moduleNameText;
-            private TextView moduleDescriptionText;
-            private MaterialSwitch moduleToggleSwitch;
-            private ImageView moduleIcon;
-            
-            public ModuleViewHolder(@NonNull View itemView) {
-                super(itemView);
-                moduleNameText = itemView.findViewById(R.id.moduleNameText);
-                moduleDescriptionText = itemView.findViewById(R.id.moduleDescriptionText);
-                moduleToggleSwitch = itemView.findViewById(R.id.moduleToggleSwitch);
-                moduleIcon = itemView.findViewById(R.id.moduleIcon);
-            }
-            
-            public void bind(ModuleItem module, ModuleToggleListener listener) {
-                moduleNameText.setText(module.getName());
-                moduleDescriptionText.setText(module.getDescription());
-                moduleToggleSwitch.setChecked(module.isEnabled());
-                
-                setModuleIcon(module);
-                
-                moduleToggleSwitch.setOnCheckedChangeListener(null);
-                moduleToggleSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                    module.setEnabled(isChecked);
-                    if (listener != null) {
-                        listener.onToggle(module, isChecked);
-                    }
-                });
-                
-                itemView.setOnClickListener(v -> {
-                    boolean newState = !moduleToggleSwitch.isChecked();
-                    moduleToggleSwitch.setChecked(newState);
-                });
-            }
-            
-            private void setModuleIcon(ModuleItem module) {
-                String configKey = module.getConfigKey();
-                int iconRes = R.drawable.wrench; // Default fallback icon
-                
-                try {
-                    switch (configKey) {
-                        case "night_vision":
-                            // Try system icon, fallback to default if not available
-                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_view);
-                            break;
-                        case "Nofog":
-                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_view);
-                            break;
-                        case "particles_disabler":
-                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_close_clear_cancel);
-                            break;
-                        case "java_clouds":
-                        case "java_cubemap":
-                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_compass);
-                            break;
-                        case "classic_skins":
-                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_gallery);
-                            break;
-                        case "no_flipbook_animations":
-                        case "no_shadows":
-                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_manage);
-                            break;
-                        case "xelo_title":
-                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_edit);
-                            break;
-                        case "white_block_outline":
-                            iconRes = getSystemIconOrFallback(android.R.drawable.ic_menu_crop);
-                            break;
-                        default:
-                            iconRes = R.drawable.wrench;
-                            break;
-                    }
-                    
-                    moduleIcon.setImageResource(iconRes);
-                    
-                } catch (Exception e) {
-                    // If any icon fails to load, use the wrench icon
-                    try {
-                        moduleIcon.setImageResource(R.drawable.wrench);
-                    } catch (Exception fallbackException) {
-                        // If even wrench icon fails, use a simple system icon
-                        moduleIcon.setImageResource(android.R.drawable.ic_menu_preferences);
-                    }
-                }
-            }
-
-            // Helper method to safely try system icons
-            private int getSystemIconOrFallback(int systemIcon) {
-                try {
-                    itemView.getContext().getResources().getDrawable(systemIcon);
-                    return systemIcon;
-                } catch (Exception e) {
-                    return R.drawable.wrench;
-                }
-            }
-        } 
-    } 
-
-// Helper method to safely try system icons
-private int getSystemIconOrFallback(int systemIcon) {
-    try {
-        // Test if the system icon exists by trying to get it
-        itemView.getContext().getResources().getDrawable(systemIcon);
-        return systemIcon;
-    } catch (Exception e) {
-        // If system icon doesn't exist, return wrench icon
-        return R.drawable.wrench;
     }
-}
+    
+    // NEW METHOD: Create individual module views
+    private View createModuleView(ModuleItem module) {
+        // Create a CardView for each module
+        MaterialCardView moduleCard = new MaterialCardView(getContext());
+        
+        // Set layout parameters (width: match_parent, height: wrap_content, margins)
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        cardParams.setMargins(1, 8, 1, 8); // Add some spacing between modules
+        moduleCard.setLayoutParams(cardParams);
+        
+        // Set card properties
+        moduleCard.setRadius(21f);
+        moduleCard.setCardElevation(4f);
+        moduleCard.setStrokeWidth(1);
+        
+        // Set card colors (you may need to adjust these based on your theme)
+        moduleCard.setCardBackgroundColor(ContextCompat.getColor(getContext(), R.color.surface));
+        moduleCard.setStrokeColor(ContextCompat.getColor(getContext(), R.color.outline));
+        
+        // Create inner layout for module content
+        LinearLayout moduleContent = new LinearLayout(getContext());
+        moduleContent.setOrientation(LinearLayout.VERTICAL);
+        moduleContent.setPadding(16, 16, 16, 16);
+        
+        // Create top row with name and switch
+        LinearLayout topRow = new LinearLayout(getContext());
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+        
+        // Add module name
+        TextView moduleNameText = new TextView(getContext());
+        moduleNameText.setText(module.getName());
+        moduleNameText.setTextSize(16f);
+        moduleNameText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurface));
+        moduleNameText.setLayoutParams(new LinearLayout.LayoutParams(
+            0,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            1f
+        ));
+        
+        // Add toggle switch
+        MaterialSwitch moduleSwitch = new MaterialSwitch(getContext());
+        moduleSwitch.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+        
+        // Set switch state and listener
+        moduleSwitch.setChecked(module.isEnabled());
+        moduleSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            module.setEnabled(isChecked);
+            onModuleToggle(module, isChecked);
+        });
+        
+        // Add views to top row
+        topRow.addView(moduleNameText);
+        topRow.addView(moduleSwitch);
+        
+        // Add description
+        TextView moduleDescriptionText = new TextView(getContext());
+        moduleDescriptionText.setText(module.getDescription());
+        moduleDescriptionText.setTextSize(14f);
+        moduleDescriptionText.setTextColor(ContextCompat.getColor(getContext(), R.color.onSurfaceVariant));
+        LinearLayout.LayoutParams descParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        descParams.setMargins(0, 8, 0, 0);
+        moduleDescriptionText.setLayoutParams(descParams);
+        
+        // Add views to module content
+        moduleContent.addView(topRow);
+        moduleContent.addView(moduleDescriptionText);
+        
+        // Add content to card
+        moduleCard.addView(moduleContent);
+        
+        return moduleCard;
+    }
     
     private void setupConfigButtons(View view) {
+        // Find the existing buttons from XML
         MaterialButton exportConfigButton = view.findViewById(R.id.exportConfigButton);
         MaterialButton importConfigButton = view.findViewById(R.id.importConfigButton);
         
+        // Set click listeners for the XML buttons
         if (exportConfigButton != null) {
             exportConfigButton.setOnClickListener(v -> {
                 if (hasStoragePermission()) {
@@ -499,150 +354,178 @@ private int getSystemIconOrFallback(int systemIcon) {
     }
     
     private void exportConfig() {
-        try {
+    try {
+        // Check if config file exists
+        if (!configFile.exists()) {
+            Toast.makeText(requireContext(), "Config file not found. Creating default config first.", Toast.LENGTH_LONG).show();
+            createDefaultConfig();
+            
+            // Verify the file was created successfully
             if (!configFile.exists()) {
-                showToast("Config file not found. Creating default config first.");
-                createDefaultConfig();
-                
-                if (!configFile.exists()) {
-                    showToast("Failed to create config file.");
-                    return;
-                }
+                Toast.makeText(requireContext(), "Failed to create config file.", Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+        
+        // Create file URI using FileProvider - try multiple approaches
+        Uri fileUri = null;
+        
+        // First approach: Use the actual config file directly
+        try {
+            fileUri = FileProvider.getUriForFile(
+                requireContext(), 
+                "com.origin.launcher.fileprovider", 
+                configFile
+            );
+        } catch (IllegalArgumentException e) {
+            // If that fails, copy to cache directory
+            File cacheDir = requireContext().getCacheDir();
+            File tempConfigFile = new File(cacheDir, "origin_config.json");
+            
+            // Delete existing temp file if it exists
+            if (tempConfigFile.exists()) {
+                tempConfigFile.delete();
             }
             
-            Uri fileUri = null;
+            // Copy the actual config file to cache directory
+            try (FileInputStream fis = new FileInputStream(configFile);
+                 FileOutputStream fos = new FileOutputStream(tempConfigFile)) {
+                
+                byte[] buffer = new byte[1024];
+                int length;
+                while ((length = fis.read(buffer)) > 0) {
+                    fos.write(buffer, 0, length);
+                }
+                fos.flush();
+            }
             
+            // Verify the temp file was created and has content
+            if (!tempConfigFile.exists() || tempConfigFile.length() == 0) {
+                Toast.makeText(requireContext(), "Failed to prepare config file for sharing.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            
+            // Create file URI for the temp file
             try {
                 fileUri = FileProvider.getUriForFile(
                     requireContext(), 
                     "com.origin.launcher.fileprovider", 
-                    configFile
+                    tempConfigFile
                 );
-            } catch (IllegalArgumentException e) {
-                File cacheDir = requireContext().getCacheDir();
-                File tempConfigFile = new File(cacheDir, "origin_config.json");
-                
-                if (tempConfigFile.exists()) {
-                    tempConfigFile.delete();
-                }
-                
-                try (FileInputStream fis = new FileInputStream(configFile);
-                     FileOutputStream fos = new FileOutputStream(tempConfigFile)) {
-                    
-                    byte[] buffer = new byte[1024];
-                    int length;
-                    while ((length = fis.read(buffer)) > 0) {
-                        fos.write(buffer, 0, length);
-                    }
-                }
-                
-                if (!tempConfigFile.exists() || tempConfigFile.length() == 0) {
-                    showToast("Failed to prepare config file for sharing.");
-                    return;
-                }
-                
-                try {
-                    fileUri = FileProvider.getUriForFile(
-                        requireContext(), 
-                        "com.origin.launcher.fileprovider", 
-                        tempConfigFile
-                    );
-                } catch (IllegalArgumentException e2) {
-                    showToast("Error: FileProvider configuration issue.");
-                    return;
-                }
-            }
-            
-            if (fileUri == null) {
-                showToast("Failed to create file URI for sharing.");
+            } catch (IllegalArgumentException e2) {
+                Toast.makeText(requireContext(), "Error: FileProvider configuration issue. Check file_provider_paths.xml", Toast.LENGTH_LONG).show();
+                e2.printStackTrace();
                 return;
             }
-            
-            Intent shareIntent = new Intent(Intent.ACTION_SEND);
-            shareIntent.setType("application/json");
-            shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
-            shareIntent.putExtra(Intent.EXTRA_SUBJECT, "Origin Launcher Config");
-            shareIntent.putExtra(Intent.EXTRA_TEXT, "Origin Launcher configuration file");
-            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            
-            if (shareIntent.resolveActivity(requireContext().getPackageManager()) != null) {
-                startActivity(Intent.createChooser(shareIntent, "Export Config File"));
-                showToast("Config file ready to share!");
-            } else {
-                showToast("No apps available to share the config file.");
-            }
-            
-        } catch (IOException e) {
-            showToast("Failed to export config: " + e.getMessage());
-            e.printStackTrace();
-        } catch (Exception e) {
-            showToast("Unexpected error during config export: " + e.getMessage());
-            e.printStackTrace();
         }
+        
+        if (fileUri == null) {
+            Toast.makeText(requireContext(), "Failed to create file URI for sharing.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        
+        // Create share intent
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("application/json");
+        shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
+        shareIntent.putExtra(Intent.EXTRA_SUBJECT, "Origin Launcher Config");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, "Origin Launcher configuration file");
+        shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        
+        // Verify that there are apps that can handle this intent
+        if (shareIntent.resolveActivity(requireContext().getPackageManager()) != null) {
+            startActivity(Intent.createChooser(shareIntent, "Export Config File"));
+            Toast.makeText(requireContext(), "Config file ready to share!", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(requireContext(), "No apps available to share the config file.", Toast.LENGTH_SHORT).show();
+        }
+        
+    } catch (IOException e) {
+        Toast.makeText(requireContext(), "Failed to export config: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        e.printStackTrace();
+    } catch (Exception e) {
+        Toast.makeText(requireContext(), "Unexpected error during config export: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        e.printStackTrace();
     }
+}
     
     private void openConfigFileChooser() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("application/json");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        importConfigLauncher.launch(Intent.createChooser(intent, "Select Config File"));
+        startActivityForResult(Intent.createChooser(intent, "Select Config File"), IMPORT_CONFIG_REQUEST_CODE);
     }
     
     private void importConfig(Uri configUri) {
-        try (InputStream inputStream = requireContext().getContentResolver().openInputStream(configUri)) {
+        try {
+            // Read the selected config file
+            InputStream inputStream = requireContext().getContentResolver().openInputStream(configUri);
             if (inputStream == null) {
-                showToast("Could not read the selected config file");
+                Toast.makeText(requireContext(), "Could not read the selected config file", Toast.LENGTH_LONG).show();
                 return;
             }
             
+            // Read content
             StringBuilder content = new StringBuilder();
             byte[] buffer = new byte[1024];
             int length;
             while ((length = inputStream.read(buffer)) > 0) {
                 content.append(new String(buffer, 0, length));
             }
+            inputStream.close();
             
+            // Validate JSON
             try {
                 new JSONObject(content.toString());
             } catch (JSONException e) {
-                showToast("Invalid config file format");
+                Toast.makeText(requireContext(), "Invalid config file format", Toast.LENGTH_LONG).show();
                 return;
             }
             
+            // Ensure config directory exists
             File parentDir = configFile.getParentFile();
             if (parentDir != null && !parentDir.exists()) {
                 parentDir.mkdirs();
             }
             
+            // Write to config file
             try (FileWriter writer = new FileWriter(configFile)) {
                 writer.write(content.toString());
             }
             
+            // Reload module states and refresh UI
             loadModuleStates();
-            showToast("Config imported successfully!");
+            populateModules(); // Refresh the UI
+            
+            Toast.makeText(requireContext(), "Config imported successfully!", Toast.LENGTH_SHORT).show();
             
         } catch (IOException e) {
-            showToast("Failed to import config: " + e.getMessage());
+            Toast.makeText(requireContext(), "Failed to import config: " + e.getMessage(), Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
     }
     
     private void onModuleToggle(ModuleItem module, boolean isEnabled) {
         updateConfigFile(module.getConfigKey(), isEnabled);
-        showToast(module.getName() + " " + (isEnabled ? "enabled" : "disabled"));
+        Toast.makeText(requireContext(), 
+            module.getName() + " " + (isEnabled ? "enabled" : "disabled"), 
+            Toast.LENGTH_SHORT).show();
     }
     
     private void loadModuleStates() {
         try {
             if (!configFile.exists()) {
+                // Create directory if it doesn't exist
                 File parentDir = configFile.getParentFile();
                 if (parentDir != null && !parentDir.exists()) {
                     parentDir.mkdirs();
                 }
+                // Create default config
                 createDefaultConfig();
                 return;
             }
             
+            // Read existing config
             StringBuilder content = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(new FileReader(configFile))) {
                 String line;
@@ -653,52 +536,50 @@ private int getSystemIconOrFallback(int systemIcon) {
             
             JSONObject config = new JSONObject(content.toString());
             
+            // Update module states
             for (ModuleItem module : moduleItems) {
                 if (config.has(module.getConfigKey())) {
                     module.setEnabled(config.getBoolean(module.getConfigKey()));
                 }
             }
             
-            if (moduleAdapter != null) {
-                moduleAdapter.updateModules();
-            }
-            
         } catch (IOException | JSONException e) {
-            showToast("Failed to load module config: " + e.getMessage());
+            Toast.makeText(requireContext(), "Failed to load module config: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             e.printStackTrace();
         }
     }
     
     private void createDefaultConfig() {
         try {
+            // Create parent directory if it doesn't exist
             File parentDir = configFile.getParentFile();
             if (parentDir != null && !parentDir.exists()) {
                 boolean created = parentDir.mkdirs();
                 if (!created) {
-                    showToast("Failed to create config directory");
+                    Toast.makeText(requireContext(), "Failed to create config directory", Toast.LENGTH_SHORT).show();
                     return;
                 }
             }
             
             JSONObject defaultConfig = new JSONObject();
             defaultConfig.put("Nohurtcam", false);
-            defaultConfig.put("night_vision", false);
             defaultConfig.put("Nofog", false);
             defaultConfig.put("particles_disabler", false);
             defaultConfig.put("java_clouds", false);
             defaultConfig.put("java_cubemap", false);
             defaultConfig.put("classic_skins", false);
+            defaultConfig.put("white_block_outline", false);
             defaultConfig.put("no_flipbook_animations", false);
             defaultConfig.put("no_shadows", false);
-            defaultConfig.put("white_block_outline", false);
+            defaultConfig.put("night_vision", false);
             defaultConfig.put("xelo_title", true);
             
             try (FileWriter writer = new FileWriter(configFile)) {
-                writer.write(defaultConfig.toString(2));
+                writer.write(defaultConfig.toString(2)); // Pretty print with indent
             }
             
         } catch (IOException | JSONException e) {
-            showToast("Failed to create default config: " + e.getMessage());
+            Toast.makeText(requireContext(), "Failed to create default config: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             e.printStackTrace();
         }
     }
@@ -708,6 +589,7 @@ private int getSystemIconOrFallback(int systemIcon) {
             JSONObject config;
             
             if (configFile.exists()) {
+                // Read existing config
                 StringBuilder content = new StringBuilder();
                 try (BufferedReader reader = new BufferedReader(new FileReader(configFile))) {
                     String line;
@@ -717,34 +599,40 @@ private int getSystemIconOrFallback(int systemIcon) {
                 }
                 config = new JSONObject(content.toString());
             } else {
+                // Create new config and ensure directory exists
                 config = new JSONObject();
                 File parentDir = configFile.getParentFile();
                 if (parentDir != null && !parentDir.exists()) {
                     boolean created = parentDir.mkdirs();
                     if (!created) {
-                        showToast("Failed to create config directory");
+                        Toast.makeText(requireContext(), "Failed to create config directory", Toast.LENGTH_SHORT).show();
                         return;
                     }
                 }
             }
             
+            // Update the specific key
             config.put(key, value);
             
+            // Write back to file
             try (FileWriter writer = new FileWriter(configFile)) {
-                writer.write(config.toString(2));
+                writer.write(config.toString(2)); // Pretty print with indent
             }
             
         } catch (IOException | JSONException e) {
-            showToast("Failed to update config: " + e.getMessage());
+            Toast.makeText(requireContext(), "Failed to update config: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             e.printStackTrace();
         }
     }
+
+    // REST OF THE CODE REMAINS THE SAME...
+    // (All the other methods like openFileChooser, openSaveLocationChooser, etc. remain unchanged)
 
     private void openFileChooser() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("application/zip");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        importBackupLauncher.launch(Intent.createChooser(intent, "Select Backup Zip File"));
+        startActivityForResult(Intent.createChooser(intent, "Select Backup Zip File"), IMPORT_REQUEST_CODE);
     }
 
     private void openSaveLocationChooser() {
@@ -752,40 +640,68 @@ private int getSystemIconOrFallback(int systemIcon) {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("application/zip");
         intent.putExtra(Intent.EXTRA_TITLE, "mojang_backup.zip");
-        exportBackupLauncher.launch(Intent.createChooser(intent, "Choose where to save backup"));
+        startActivityForResult(Intent.createChooser(intent, "Choose where to save backup"), EXPORT_REQUEST_CODE);
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == IMPORT_REQUEST_CODE && resultCode == getActivity().RESULT_OK && data != null) {
+            Uri zipUri = data.getData();
+            if (zipUri != null) {
+                importBackup(zipUri);
+            }
+        } else if (requestCode == EXPORT_REQUEST_CODE && resultCode == getActivity().RESULT_OK && data != null) {
+            Uri saveUri = data.getData();
+            if (saveUri != null && currentRootDir != null) {
+                createBackupAtLocation(saveUri, currentRootDir);
+            }
+        } else if (requestCode == IMPORT_CONFIG_REQUEST_CODE && resultCode == getActivity().RESULT_OK && data != null) {
+            Uri configUri = data.getData();
+            if (configUri != null) {
+                importConfig(configUri);
+            }
+        }
     }
 
     private void importBackup(Uri zipUri) {
         try {
+            // Use the specific target directory
             File targetDir = new File("/storage/emulated/0/Android/data/com.origin.launcher/files/games/com.mojang/");
             
+            // Create directory if it doesn't exist
             if (!targetDir.exists()) {
                 boolean created = targetDir.mkdirs();
                 if (!created) {
-                    showToast("Could not create target directory: " + targetDir.getAbsolutePath());
+                    Toast.makeText(requireContext(), "Could not create target directory: " + targetDir.getAbsolutePath(), Toast.LENGTH_LONG).show();
                     return;
                 }
             }
             
+            // Check if we can write to the directory
             if (!targetDir.canWrite()) {
-                showToast("Cannot write to target directory: " + targetDir.getAbsolutePath());
+                Toast.makeText(requireContext(), "Cannot write to target directory: " + targetDir.getAbsolutePath(), Toast.LENGTH_LONG).show();
                 return;
             }
             
-            showToast("Importing backup to: " + targetDir.getAbsolutePath());
+            Toast.makeText(requireContext(), "Importing backup to: " + targetDir.getAbsolutePath(), Toast.LENGTH_SHORT).show();
             
-            try (InputStream inputStream = requireContext().getContentResolver().openInputStream(zipUri)) {
-                if (inputStream != null) {
-                    extractZip(inputStream, targetDir);
-                    currentRootDir = targetDir;
-                    showToast("Backup imported successfully!");
-                    refreshFolderList();
-                } else {
-                    showToast("Could not read the selected file");
-                }
+            InputStream inputStream = requireContext().getContentResolver().openInputStream(zipUri);
+            if (inputStream != null) {
+                extractZip(inputStream, targetDir);
+                
+                // Update currentRootDir to the new location
+                currentRootDir = targetDir;
+                
+                Toast.makeText(requireContext(), "Backup imported successfully!", Toast.LENGTH_LONG).show();
+                
+                // Refresh the folder list
+                refreshFolderList();
+            } else {
+                Toast.makeText(requireContext(), "Could not read the selected file", Toast.LENGTH_LONG).show();
             }
         } catch (Exception e) {
-            showToast("Import failed: " + e.getMessage());
+            Toast.makeText(requireContext(), "Import failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
     }
@@ -793,42 +709,46 @@ private int getSystemIconOrFallback(int systemIcon) {
     private void extractZip(InputStream zipInputStream, File targetDir) throws IOException {
         try (ZipInputStream zis = new ZipInputStream(zipInputStream)) {
             ZipEntry zipEntry;
-            byte[] buffer = new byte[4096];
+            byte[] buffer = new byte[4096]; // Increased buffer size
             
             while ((zipEntry = zis.getNextEntry()) != null) {
                 String fileName = zipEntry.getName();
                 
-                // Enhanced security check for path traversal
-                if (fileName.contains("..") || fileName.contains("..%") || 
-                    fileName.startsWith("/") || fileName.contains("\\")) {
+                // Security check: prevent directory traversal
+                if (fileName.contains("..")) {
                     continue;
                 }
                 
                 File newFile = new File(targetDir, fileName);
                 
-                // Additional security: ensure the file is within target directory
-                String canonicalDestPath = targetDir.getCanonicalPath();
-                String canonicalDestFile = newFile.getCanonicalPath();
-                if (!canonicalDestFile.startsWith(canonicalDestPath + File.separator) && 
-                    !canonicalDestFile.equals(canonicalDestPath)) {
-                    continue;
-                }
-                
                 if (zipEntry.isDirectory()) {
+                    // Create directory
                     if (!newFile.exists()) {
-                        newFile.mkdirs();
+                        boolean created = newFile.mkdirs();
+                        if (!created) {
+                            System.err.println("Failed to create directory: " + newFile.getAbsolutePath());
+                        }
                     }
                 } else {
+                    // Create parent directories if they don't exist
                     File parentDir = newFile.getParentFile();
                     if (parentDir != null && !parentDir.exists()) {
-                        parentDir.mkdirs();
+                        boolean created = parentDir.mkdirs();
+                        if (!created) {
+                            System.err.println("Failed to create parent directory: " + parentDir.getAbsolutePath());
+                            continue;
+                        }
                     }
                     
+                    // Extract file
                     try (FileOutputStream fos = new FileOutputStream(newFile)) {
                         int len;
                         while ((len = zis.read(buffer)) > 0) {
                             fos.write(buffer, 0, len);
                         }
+                        fos.flush();
+                    } catch (IOException e) {
+                        System.err.println("Failed to extract file: " + newFile.getAbsolutePath() + " - " + e.getMessage());
                     }
                 }
                 zis.closeEntry();
@@ -837,23 +757,52 @@ private int getSystemIconOrFallback(int systemIcon) {
     }
 
     private void refreshFolderList() {
-        View view = getView();
-        if (view == null) return;
-        
-        RecyclerView folderRecyclerView = view.findViewById(R.id.folderRecyclerView);
+        RecyclerView folderRecyclerView = getView().findViewById(R.id.folderRecyclerView);
         if (folderRecyclerView != null) {
-            setupFolderDisplay(folderRecyclerView);
+            // Re-scan for folders
+            String[] possiblePaths = {
+                "/storage/emulated/0/Android/data/com.origin.launcher/files/games/com.mojang/",
+                "/storage/emulated/0/games/com.mojang/",
+                "/storage/emulated/0/Android/data/com.mojang.minecraftpe/files/games/com.mojang/",
+                getContext().getExternalFilesDir(null) + "/games/com.mojang/"
+            };
+            
+            File rootDir = null;
+            for (String path : possiblePaths) {
+                File testDir = new File(path);
+                if (testDir.exists() && testDir.isDirectory()) {
+                    File[] testFiles = testDir.listFiles();
+                    if (testFiles != null && testFiles.length > 0) {
+                        rootDir = testDir;
+                        currentRootDir = testDir;
+                        break;
+                    }
+                }
+            }
+            
+            List<String> folderNames = new ArrayList<>();
+            if (rootDir != null && rootDir.exists() && rootDir.isDirectory()) {
+                File[] files = rootDir.listFiles();
+                if (files != null) {
+                    for (File file : files) {
+                        if (file.isDirectory()) {
+                            folderNames.add(file.getName());
+                        }
+                    }
+                }
+            } else {
+                folderNames.add("No Minecraft data found");
+            }
+            FolderAdapter adapter = new FolderAdapter(folderNames);
+            folderRecyclerView.setAdapter(adapter);
         }
     }
 
     private void initializeOptionsEditor(View view) {
-        // Use dynamic path resolution for options file
-        if (currentRootDir != null) {
-            optionsFile = new File(currentRootDir, "minecraftpe/options.txt");
-        } else {
-            optionsFile = new File("/storage/emulated/0/Android/data/com.origin.launcher/files/games/com.mojang/minecraftpe/options.txt");
-        }
+        // Initialize options.txt file path
+        optionsFile = new File("/storage/emulated/0/Android/data/com.origin.launcher/files/games/com.mojang/minecraftpe/options.txt");
         
+        // Get UI elements
         editOptionsButton = view.findViewById(R.id.editOptionsButton);
         TextView optionsNotFoundText = view.findViewById(R.id.optionsNotFoundText);
         optionsEditorLayout = view.findViewById(R.id.optionsEditorLayout);
@@ -867,6 +816,7 @@ private int getSystemIconOrFallback(int systemIcon) {
         MaterialButton searchOptionsButton = view.findViewById(R.id.searchOptionsButton);
         MaterialButton closeEditorButton = view.findViewById(R.id.closeEditorButton);
         
+        // Check if options.txt exists
         if (optionsFile.exists()) {
             editOptionsButton.setVisibility(View.VISIBLE);
             optionsNotFoundText.setVisibility(View.GONE);
@@ -883,6 +833,7 @@ private int getSystemIconOrFallback(int systemIcon) {
             optionsNotFoundText.setVisibility(View.VISIBLE);
         }
         
+        // Set up editor buttons
         if (saveOptionsButton != null) {
             saveOptionsButton.setOnClickListener(v -> saveOptionsFile());
         }
@@ -900,6 +851,7 @@ private int getSystemIconOrFallback(int systemIcon) {
                 if (searchInputLayout.getVisibility() == View.GONE) {
                     toggleSearch();
                 } else {
+                    // If search is already open, cycle through matches
                     String searchTerm = searchEditText.getText().toString().trim();
                     if (!searchTerm.isEmpty()) {
                         findNextMatch(searchTerm);
@@ -912,6 +864,7 @@ private int getSystemIconOrFallback(int systemIcon) {
             closeEditorButton.setOnClickListener(v -> closeOptionsEditor());
         }
         
+        // Set up search functionality
         if (searchEditText != null) {
             searchEditText.addTextChangedListener(new TextWatcher() {
                 @Override
@@ -923,6 +876,7 @@ private int getSystemIconOrFallback(int systemIcon) {
                     if (!searchTerm.isEmpty()) {
                         searchInText(searchTerm);
                     } else {
+                        // Clear search results when search term is empty
                         clearSearchResults();
                     }
                 }
@@ -931,6 +885,7 @@ private int getSystemIconOrFallback(int systemIcon) {
                 public void afterTextChanged(Editable s) {}
             });
             
+            // Handle Enter key in search
             searchEditText.setOnEditorActionListener((v, actionId, event) -> {
                 if (actionId == EditorInfo.IME_ACTION_SEARCH || 
                     (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN)) {
@@ -944,10 +899,27 @@ private int getSystemIconOrFallback(int systemIcon) {
             });
         }
         
+        // Set up text change listener for undo/redo
         if (optionsTextEditor != null) {
-            optionsTextWatcher = new SafeTextWatcher(this);
-            optionsTextEditor.addTextChangedListener(optionsTextWatcher);
+            optionsTextEditor.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) {}
+                
+                @Override
+                public void afterTextChanged(Editable s) {
+                    // Add to undo stack when text changes
+                    String currentText = s.toString();
+                    if (!currentText.equals(originalOptionsContent) && !undoStack.isEmpty() && !currentText.equals(undoStack.peek())) {
+                        undoStack.push(currentText);
+                        redoStack.clear(); // Clear redo stack when new changes are made
+                    }
+                }
+            });
             
+            // Handle touch events to ensure proper focus
             optionsTextEditor.setOnTouchListener((v, event) -> {
                 v.requestFocus();
                 v.getParent().requestDisallowInterceptTouchEvent(true);
@@ -955,16 +927,10 @@ private int getSystemIconOrFallback(int systemIcon) {
             });
         }
     }
-    
-    private void handleTextChanged(String currentText) {
-        if (!currentText.equals(originalOptionsContent) && !undoStack.isEmpty() && !currentText.equals(undoStack.peek())) {
-            undoStack.push(currentText);
-            redoStack.clear();
-        }
-    }
 
     private void openOptionsEditor() {
         try {
+            // Read the options.txt file
             StringBuilder content = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(new FileReader(optionsFile))) {
                 String line;
@@ -976,18 +942,20 @@ private int getSystemIconOrFallback(int systemIcon) {
             originalOptionsContent = content.toString();
             optionsTextEditor.setText(originalOptionsContent);
             
+            // Initialize undo stack
             undoStack.clear();
             redoStack.clear();
             undoStack.push(originalOptionsContent);
             
+            // Show editor and disable edit button
             optionsEditorLayout.setVisibility(View.VISIBLE);
             editOptionsButton.setEnabled(false);
             editOptionsButton.setText("Editor Open");
             
-            showToast("Options.txt loaded successfully");
+            Toast.makeText(requireContext(), "Options.txt loaded successfully", Toast.LENGTH_SHORT).show();
             
         } catch (IOException e) {
-            showToast("Failed to load options.txt: " + e.getMessage());
+            Toast.makeText(requireContext(), "Failed to load options.txt: " + e.getMessage(), Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
     }
@@ -1000,10 +968,10 @@ private int getSystemIconOrFallback(int systemIcon) {
             }
             
             originalOptionsContent = content;
-            showToast("Options.txt saved successfully");
+            Toast.makeText(requireContext(), "Options.txt saved successfully", Toast.LENGTH_SHORT).show();
             
         } catch (IOException e) {
-            showToast("Failed to save options.txt: " + e.getMessage());
+            Toast.makeText(requireContext(), "Failed to save options.txt: " + e.getMessage(), Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
     }
@@ -1013,14 +981,15 @@ private int getSystemIconOrFallback(int systemIcon) {
             int currentCursorPosition = optionsTextEditor.getSelectionStart();
             String currentText = optionsTextEditor.getText().toString();
             redoStack.push(currentText);
-            undoStack.pop();
+            undoStack.pop(); // Remove current state
             String previousText = undoStack.peek();
             optionsTextEditor.setText(previousText);
             
+            // Maintain cursor position or set to safe position
             int safePosition = Math.min(currentCursorPosition, previousText.length());
             optionsTextEditor.setSelection(safePosition);
         } else {
-            showToast("Nothing to undo");
+            Toast.makeText(requireContext(), "Nothing to undo", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -1031,10 +1000,11 @@ private int getSystemIconOrFallback(int systemIcon) {
             undoStack.push(redoText);
             optionsTextEditor.setText(redoText);
             
+            // Maintain cursor position or set to safe position
             int safePosition = Math.min(currentCursorPosition, redoText.length());
             optionsTextEditor.setSelection(safePosition);
         } else {
-            showToast("Nothing to redo");
+            Toast.makeText(requireContext(), "Nothing to redo", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -1044,6 +1014,7 @@ private int getSystemIconOrFallback(int systemIcon) {
             searchEditText.requestFocus();
         } else {
             searchInputLayout.setVisibility(View.GONE);
+            // Clear search results and highlighting
             clearSearchResults();
         }
     }
@@ -1054,20 +1025,17 @@ private int getSystemIconOrFallback(int systemIcon) {
             return;
         }
         
+        // Update current search term and find all matches
         currentSearchTerm = searchTerm;
         findAllMatches(searchTerm);
-        
-        isUpdatingSearchHighlight = true;
         
         String text = optionsTextEditor.getText().toString();
         SpannableString spannable = new SpannableString(text);
         
-        // Use color resource instead of hardcoded color
-        int highlightColor = ContextCompat.getColor(requireContext(), android.R.color.holo_orange_light);
-        
+        // Highlight all matches
         for (int matchIndex : searchMatches) {
             spannable.setSpan(
-                new BackgroundColorSpan(highlightColor),
+                new BackgroundColorSpan(0xFFFFFF00), // Yellow highlight color
                 matchIndex,
                 matchIndex + searchTerm.length(),
                 Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -1075,9 +1043,9 @@ private int getSystemIconOrFallback(int systemIcon) {
         }
         
         optionsTextEditor.setText(spannable);
-        currentMatchIndex = -1;
         
-        isUpdatingSearchHighlight = false;
+        // Reset match index when search term changes
+        currentMatchIndex = -1;
     }
 
     private void findAllMatches(String searchTerm) {
@@ -1097,27 +1065,28 @@ private int getSystemIconOrFallback(int systemIcon) {
         searchMatches.clear();
         currentMatchIndex = -1;
         currentSearchTerm = "";
-        
-        isUpdatingSearchHighlight = true;
+        // Clear highlighting by resetting text
         String plainText = optionsTextEditor.getText().toString();
         optionsTextEditor.setText(plainText);
-        isUpdatingSearchHighlight = false;
     }
 
     private void closeOptionsEditor() {
         optionsEditorLayout.setVisibility(View.GONE);
         searchInputLayout.setVisibility(View.GONE);
         
+        // Re-enable edit button
         editOptionsButton.setEnabled(true);
         editOptionsButton.setText("Edit options.txt");
         
+        // Clear undo/redo stacks
         undoStack.clear();
         redoStack.clear();
         
-        showToast("Editor closed");
+        Toast.makeText(requireContext(), "Editor closed", Toast.LENGTH_SHORT).show();
     }
 
     private void findNextMatch(String searchTerm) {
+        // If search term changed, find all matches first
         if (!searchTerm.equals(currentSearchTerm)) {
             currentSearchTerm = searchTerm;
             findAllMatches(searchTerm);
@@ -1125,101 +1094,168 @@ private int getSystemIconOrFallback(int systemIcon) {
         }
         
         if (searchMatches.isEmpty()) {
-            showToast("No matches found");
+            Toast.makeText(requireContext(), "No matches found", Toast.LENGTH_SHORT).show();
             return;
         }
         
+        // Move to next match
         currentMatchIndex++;
         if (currentMatchIndex >= searchMatches.size()) {
-            currentMatchIndex = 0;
+            currentMatchIndex = 0; // Wrap around to first match
         }
         
         int matchPosition = searchMatches.get(currentMatchIndex);
         
+        // Select the found text
         optionsTextEditor.setSelection(matchPosition, matchPosition + searchTerm.length());
         optionsTextEditor.requestFocus();
         
+        // Scroll to make the selection visible
         scrollToPosition(matchPosition);
         
+        // Show current match info
         String message = "Match " + (currentMatchIndex + 1) + " of " + searchMatches.size();
-        showToast(message);
+        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
     }
 
     private void scrollToPosition(int position) {
+        // Get the layout of the EditText
         android.text.Layout layout = optionsTextEditor.getLayout();
         if (layout != null) {
+            // Get the line number for the position
             int line = layout.getLineForOffset(position);
+            
+            // Get the Y coordinate of the line
             int lineTop = layout.getLineTop(line);
             int lineBottom = layout.getLineBottom(line);
             int lineHeight = lineBottom - lineTop;
             
+            // Calculate scroll position to center the line in view
             int editorHeight = optionsTextEditor.getHeight();
             int scrollY = Math.max(0, lineTop - (editorHeight / 2) + (lineHeight / 2));
             
+            // Scroll to the calculated position
             optionsTextEditor.scrollTo(0, scrollY);
         }
     }
 
     private boolean hasStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ (API 33+) - Check media permissions
             return ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED ||
                    ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED ||
                    ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+ (API 30+) - Check MANAGE_EXTERNAL_STORAGE
             return Environment.isExternalStorageManager();
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // Android 6+ to Android 10 - Check legacy storage permissions
             return ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED ||
                    ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         }
-        return true;
+        return true; // Below Android 6, permissions are granted at install time
     }
 
     private void requestStoragePermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ (API 33+) - Request media permissions
             String[] permissions = {
                 Manifest.permission.READ_MEDIA_IMAGES,
                 Manifest.permission.READ_MEDIA_VIDEO,
                 Manifest.permission.READ_MEDIA_AUDIO,
                 Manifest.permission.READ_EXTERNAL_STORAGE
             };
-            permissionLauncher.launch(permissions);
+            requestPermissions(permissions, 1001);
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            showToast("Please grant 'All files access' permission to backup files");
+            // Android 11+ (API 30+) - Request MANAGE_EXTERNAL_STORAGE
+            Toast.makeText(requireContext(), "Please grant 'All files access' permission to backup files", Toast.LENGTH_LONG).show();
             Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
             intent.setData(Uri.parse("package:" + requireContext().getPackageName()));
             startActivity(intent);
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // Android 6+ to Android 10 - Request READ_EXTERNAL_STORAGE and WRITE_EXTERNAL_STORAGE
             String[] permissions = {
                 Manifest.permission.READ_EXTERNAL_STORAGE,
                 Manifest.permission.WRITE_EXTERNAL_STORAGE
             };
-            permissionLauncher.launch(permissions);
+            requestPermissions(permissions, 1001);
         }
     }
 
     private void createBackupAtLocation(Uri saveUri, File rootDir) {
         try {
+            // Check if source directory exists and has content
             if (!rootDir.exists()) {
-                showToast("Minecraft data directory not found: " + rootDir.getAbsolutePath());
+                Toast.makeText(requireContext(), "Minecraft data directory not found: " + rootDir.getAbsolutePath(), Toast.LENGTH_LONG).show();
                 return;
             }
             
             File[] files = rootDir.listFiles();
             if (files == null || files.length == 0) {
-                showToast("No files found to backup in: " + rootDir.getAbsolutePath());
+                Toast.makeText(requireContext(), "No files found to backup in: " + rootDir.getAbsolutePath(), Toast.LENGTH_LONG).show();
                 return;
             }
             
-            showToast("Creating backup...");
+            Toast.makeText(requireContext(), "Creating backup...", Toast.LENGTH_SHORT).show();
             
+            // Create backup directly to the chosen location
             try (ZipOutputStream zos = new ZipOutputStream(requireContext().getContentResolver().openOutputStream(saveUri))) {
                 zipDirectoryToStream(rootDir, rootDir.getAbsolutePath(), zos);
-                showToast("Backup saved successfully!");
+                Toast.makeText(requireContext(), "Backup saved successfully!", Toast.LENGTH_SHORT).show();
             }
             
         } catch (Exception e) {
-            showToast("Backup failed: " + e.getMessage());
+            Toast.makeText(requireContext(), "Backup failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
             e.printStackTrace();
+        }
+    }
+
+    private void backupAndShare(File rootDir) {
+        try {
+            // Check if source directory exists and has content
+            if (!rootDir.exists()) {
+                Toast.makeText(requireContext(), "Minecraft data directory not found: " + rootDir.getAbsolutePath(), Toast.LENGTH_LONG).show();
+                return;
+            }
+            
+            File[] files = rootDir.listFiles();
+            if (files == null || files.length == 0) {
+                Toast.makeText(requireContext(), "No files found to backup in: " + rootDir.getAbsolutePath(), Toast.LENGTH_LONG).show();
+                return;
+            }
+            
+            File cacheDir = requireContext().getCacheDir();
+            File zipFile = new File(cacheDir, "mojang_backup.zip");
+            
+            // Delete existing zip file if it exists
+            if (zipFile.exists()) {
+                zipFile.delete();
+            }
+            
+            Toast.makeText(requireContext(), "Creating backup...", Toast.LENGTH_SHORT).show();
+            zipDirectory(rootDir, zipFile);
+            
+            if (!zipFile.exists() || zipFile.length() == 0) {
+                Toast.makeText(requireContext(), "Failed to create backup file", Toast.LENGTH_LONG).show();
+                return;
+            }
+            
+            Uri fileUri = FileProvider.getUriForFile(requireContext(), "com.origin.launcher.fileprovider", zipFile);
+            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.setType("application/zip");
+            shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(shareIntent, "Share Backup Zip"));
+            Toast.makeText(requireContext(), "Backup created successfully!", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(requireContext(), "Backup failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            e.printStackTrace(); // This will help with debugging
+        }
+    }
+
+    private void zipDirectory(File sourceDir, File zipFile) throws IOException {
+        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipFile))) {
+            zipFileRecursive(sourceDir, sourceDir.getAbsolutePath(), zos);
         }
     }
 
@@ -1239,6 +1275,7 @@ private int getSystemIconOrFallback(int systemIcon) {
             return;
         }
         
+        // Skip files that can't be read
         if (!fileToZip.canRead()) {
             return;
         }
@@ -1258,61 +1295,61 @@ private int getSystemIconOrFallback(int systemIcon) {
             }
             zos.closeEntry();
         } catch (IOException e) {
+            // Skip files that can't be read, but continue with others
             System.err.println("Skipping file due to error: " + fileToZip.getAbsolutePath() + " - " + e.getMessage());
         }
     }
-    
-    private void showToast(String message) {
-        if (isAdded()) {
-            Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1001) {
+            boolean granted = false;
+            for (int result : grantResults) {
+                if (result == PackageManager.PERMISSION_GRANTED) {
+                    granted = true;
+                    break;
+                }
+            }
+            
+            if (granted) {
+                if (currentRootDir != null) {
+                    backupAndShare(currentRootDir);
+                } else {
+                    Toast.makeText(requireContext(), "No Minecraft data found to backup", Toast.LENGTH_LONG).show();
+                }
+            } else {
+                Toast.makeText(requireContext(), "Storage permission is required to backup files", Toast.LENGTH_LONG).show();
+            }
         }
     }
 
+    // Improved adapter for folder names with custom styling
     private static class FolderAdapter extends RecyclerView.Adapter<FolderViewHolder> {
         private final List<String> folders;
-        
-        FolderAdapter(List<String> folders) { 
-            this.folders = folders; 
-        }
-        
+        FolderAdapter(List<String> folders) { this.folders = folders; }
         @NonNull
         @Override
         public FolderViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_folder, parent, false);
             return new FolderViewHolder(view);
         }
-        
         @Override
         public void onBindViewHolder(@NonNull FolderViewHolder holder, int position) {
             holder.bind(folders.get(position));
         }
-        
         @Override
-        public int getItemCount() { 
-            return folders.size(); 
-        }
+        public int getItemCount() { return folders.size(); }
     }
     
     private static class FolderViewHolder extends RecyclerView.ViewHolder {
-        private final TextView textView;
-        
+        private final android.widget.TextView textView;
         FolderViewHolder(@NonNull View itemView) {
             super(itemView);
             textView = itemView.findViewById(R.id.folderNameText);
         }
-        
         void bind(String folderName) {
             textView.setText(folderName);
         }
-    }
-    
-    @Override
-    public void onDestroyView() {
-        super.onDestroyView();
-        // Clean up to prevent memory leaks
-        if (optionsTextEditor != null && optionsTextWatcher != null) {
-            optionsTextEditor.removeTextChangedListener(optionsTextWatcher);
-        }
-        optionsTextWatcher = null;
     }
 }
