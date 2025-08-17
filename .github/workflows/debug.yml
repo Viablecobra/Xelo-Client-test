@@ -1,17 +1,18 @@
-name: Build Origin App
+name: Build Debug APK
 
 on:
   push:
-    branches: [master]
+    branches: [master, develop]
   pull_request:
-    branches: [master]
+    branches: [master, develop]
 
 jobs:
-  build:
+  debug-build:
     runs-on: ubuntu-latest
     env:
       JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
       ANDROID_NDK_VERSION: 27.1.12297006
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -33,27 +34,40 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
+          key: ${{ runner.os }}-gradle-debug-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
           restore-keys: |
+            ${{ runner.os }}-gradle-debug-
             ${{ runner.os }}-gradle-
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
+      - name: Run Tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease --stacktrace
+      - name: List Debug APK files
+        run: |
+          echo "Debug APK files generated:"
+          find app/build/outputs/apk/debug -name "*.apk" -type f || echo "No APK files found"
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: origin-debug-apk-${{ github.run_number }}
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+          if-no-files-found: error
 
-      - name: Upload Release APK
+      - name: Upload Test Results
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: app-release-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          name: debug-test-results-${{ github.run_number }}
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
