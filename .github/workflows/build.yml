@@ -1,73 +1,49 @@
-name: Build Debug APK
+distribution: temurin
 
-on:
-  push:
-    branches: [master, develop]
-  pull_request:
-    branches: [master, develop]
-
-jobs:
-  debug-build:
-    runs-on: ubuntu-latest
-    env:
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
-      ANDROID_NDK_VERSION: 27.1.12297006
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Set up Android SDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          ndk-version: ${{ env.ANDROID_NDK_VERSION }}
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-debug-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-debug-
-            ${{ runner.os }}-gradle-
+      - name: Accept Licenses
+        run: yes | sdkmanager --licenses
 
-      - name: Grant execute permission for gradlew
+      - name: Install Build Tools 35.0.0
+        run: sdkmanager "build-tools;35.0.0"
+
+      - name: Verify installed SDK Packages
+        run: sdkmanager --list
+
+      - name: Setup Xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: "2.9.9"
+          actions-cache-folder: ".xmake-cache"
+          actions-cache-key: "ubuntulinux-ci"
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27
+          link-to-sdk: true
+
+      - name: Grant Execute Permission to gradlew
         run: chmod +x ./gradlew
 
-      - name: Run Tests
-        run: ./gradlew testDebugUnitTest --stacktrace
-
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: List Debug APK files
-        run: |
-          echo "Debug APK files generated:"
-          find app/build/outputs/apk/debug -name "*.apk" -type f || echo "No APK files found"
+      - name: Build Debug and Unsigned Release APKs
+        run: ./gradlew assembleDebug assembleRelease
 
       - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
-          name: origin-debug-apk-${{ github.run_number }}
+          name: LeviLauncher-debug-apk
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 14
-          if-no-files-found: error
 
-      - name: Upload Test Results
-        uses: actions/upload-artifact@v4
-        if: always()
+      - name: Upload Unsigned Release APK
+        uses: actions/upload-artifact@v4.6.2
         with:
-          name: debug-test-results-${{ github.run_number }}
-          path: |
-            app/build/reports/tests/
-            app/build/test-results/
-          retention-days: 7
-          if-no-files-found: ignore
+          name: LeviLauncher-release-unsigned-apk
+          path: app/build/outputs/apk/release/*-unsigned.apk
+
+      - name: Sign Release APK
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: kevin-david/zipalign-sign-android-release@v2
+        id: sign_app
