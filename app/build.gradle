@@ -69,7 +69,6 @@ packagingOptions {
 pickFirst '**/libc++_shared.so'
 pickFirst '**/libjnidispatch.so'
 }
-}
 
 dependencies {
 implementation libs.appcompat
