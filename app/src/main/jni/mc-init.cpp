@@ -21,3 +21,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     ANativeActivity_onCreate_minecraft = (void (*)(ANativeActivity *, void *, size_t)) (dlsym(handle, "ANativeActivity_onCreate"));
     return JNI_VERSION_1_6;
 }
+
+extern "C" JNIEXPORT void JNICALL Java_org_levimc_launcher_core_minecraft_pesdk_nativeapi_LibraryLoader_nativeOnLauncherLoaded(JNIEnv*env, jclass thiz, jstring libPath) {
+    const char * mNativeLibPath = env->GetStringUTFChars(libPath, 0);
+    void* imageMCPE=(void*) dlopen(mNativeLibPath,RTLD_LAZY);
+    dlclose(imageMCPE);
+    env->ReleaseStringUTFChars(libPath,mNativeLibPath);
+}
