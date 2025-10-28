@@ -20,14 +20,6 @@ abiFilters 'arm64-v8a', 'armeabi-v7a'
 }
 }
 
-    buildFeatures {
-        viewBinding true
-        prefab true
-    }
-
-
-
-
 buildTypes {
 release {
 minifyEnabled false
