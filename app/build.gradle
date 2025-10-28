@@ -6,11 +6,11 @@ alias(libs.plugins.kotlin.android)
 android {
 namespace 'com.origin.launcher'
 compileSdk 36
-buildToolsVersion = "35.0.0"
+buildToolsVersion = "36.0.0"
 defaultConfig {
 applicationId "com.origin.launcher"
 minSdk 26
-targetSdk 35
+targetSdk 36
 versionCode 15
 versionName "1.5"
 testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -22,8 +22,8 @@ abiFilters 'arm64-v8a', 'armeabi-v7a'
 
 buildTypes {
 release {
-minifyEnabled false
-shrinkResources false
+minifyEnabled true
+shrinkResources true
 proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
 }
 }
@@ -35,11 +35,6 @@ kotlinOptions {
 jvmTarget = "1.8"
 }
 externalNativeBuild {
-   xmake {
-            path "src/main/cpp/leviutils/xmake.lua"
-            logLevel "verbose"
-            buildMode "release"
-        }
   
 ndkBuild {
 path "src/main/jni/Android.mk"
@@ -47,14 +42,12 @@ path "src/main/jni/Android.mk"
 }
 ndkVersion "25.2.9519653"
 
-packaging {
-        resources {
-            excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE', 'META-INF/NOTICE']
-        }
-    }
 
 // Add packaging options to handle native libraries
 packagingOptions {
+resources {
+            excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE', 'META-INF/NOTICE']
+        }
 pickFirst '**/libc++_shared.so'
 pickFirst '**/libjnidispatch.so'
 }
