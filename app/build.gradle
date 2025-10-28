@@ -5,12 +5,12 @@ alias(libs.plugins.kotlin.android)
 
 android {
 namespace 'com.origin.launcher'
-compileSdk 36
-buildToolsVersion = "36.0.0"
+compileSdk 35
+buildToolsVersion = "35.0.0"
 defaultConfig {
 applicationId "com.origin.launcher"
 minSdk 26
-targetSdk 36
+targetSdk 35
 versionCode 15
 versionName "1.5"
 testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -18,8 +18,6 @@ ndk {
 abiFilters 'arm64-v8a', 'armeabi-v7a'
 }
 }
-}
-
 buildTypes {
 release {
 minifyEnabled false
@@ -28,28 +26,24 @@ proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard
 }
 }
 compileOptions {
-sourceCompatibility JavaVersion.VERSION_17
-targetCompatibility JavaVersion.VERSION_17
+sourceCompatibility JavaVersion.VERSION_1_8
+targetCompatibility JavaVersion.VERSION_1_8
 }
 kotlinOptions {
 jvmTarget = "1.8"
 }
 externalNativeBuild {
-  
 ndkBuild {
 path "src/main/jni/Android.mk"
 }
 }
-ndkVersion "25.2.9519653"
-
+ndkVersion "27.1.12297006"
 
 // Add packaging options to handle native libraries
 packagingOptions {
-resources {
-            excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE', 'META-INF/NOTICE']
-        }
 pickFirst '**/libc++_shared.so'
 pickFirst '**/libjnidispatch.so'
+}
 }
 
 dependencies {
@@ -57,18 +51,11 @@ implementation libs.appcompat
 implementation libs.conscrypt.android
 implementation libs.constraintlayout
 implementation 'com.google.android.material:material:1.12.0'
-implementation project(":minecraft")
-implementation project(":httpclient")
-implementation project(":microsoft:xal")
-implementation project(":microsoft:xbox")
-implementation project(":fmod")
 
 implementation 'org.java-websocket:Java-WebSocket:1.5.3'
 implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
-implementation libs.androidx.games.activity.v122
-implementation(libs.androidx.preference.ktx)
-  
+
 testImplementation libs.junit
 androidTestImplementation libs.ext.junit
 androidTestImplementation libs.espresso.core
