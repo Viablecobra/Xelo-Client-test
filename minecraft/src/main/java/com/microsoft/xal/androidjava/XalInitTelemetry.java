@@ -2,7 +2,6 @@ package com.microsoft.xal.androidjava;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
-
 import androidx.appcompat.app.AppCompatActivity;
 import com.microsoft.applications.events.HttpClient;
 
@@ -12,7 +11,11 @@ import com.microsoft.applications.events.HttpClient;
 
 public class XalInitTelemetry extends AppCompatActivity {
     static void initOneDS() {
-        System.loadLibrary("maesdk");
+        try{
+            System.loadLibrary("maesdk");
+        } catch (UnsatisfiedLinkError e) {
+
+        }
     }
 
     static void startHttpClient(Context context) throws PackageManager.NameNotFoundException {
