@@ -1,62 +1,132 @@
 plugins {
-alias(libs.plugins.android.application)
-alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+}
+
+def getGitTag() {
+    def tag = "unknown"
+    try {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'describe', '--tags', '--abbrev=0'
+            standardOutput = stdout
+        }
+        tag = stdout.toString().trim()
+        if (tag.startsWith("v")) {
+            tag = tag.substring(1)
+        }
+    } catch (ignored) {
+    }
+    return tag
+}
+
+static def getVersionCodeByTimestamp() {
+    def baseDate = Date.parse("yyyy-MM-dd HH:mm:ss", "2025-01-01 00:00:00")
+    def now = new Date()
+    def diff = (now.time - baseDate.time) / 1000
+    return diff.toInteger()
 }
 
 android {
-namespace 'com.origin.launcher'
-compileSdk 35
-buildToolsVersion = "35.0.0"
-defaultConfig {
-applicationId "com.origin.launcher"
-minSdk 26
-targetSdk 35
-versionCode 15
-versionName "1.5"
-testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-ndk {
-abiFilters 'arm64-v8a', 'armeabi-v7a'
-}
-}
-buildTypes {
-release {
-minifyEnabled false
-shrinkResources false
-proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-}
-}
-compileOptions {
-sourceCompatibility JavaVersion.VERSION_1_8
-targetCompatibility JavaVersion.VERSION_1_8
-}
-kotlinOptions {
-jvmTarget = "1.8"
-}
-externalNativeBuild {
-ndkBuild {
-path "src/main/jni/Android.mk"
-}
-}
-ndkVersion "27.1.12297006"
+    namespace 'com.origin.launcher'
+    compileSdkVersion 36
+    defaultConfig {
+        applicationId "com.origin.launcher"
+        minSdkVersion 26
+        targetSdkVersion 35
+        versionCode getVersionCodeByTimestamp()
+        versionName getGitTag()
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            //noinspection ChromeOsAbiSupport
+            abiFilters 'arm64-v8a'
+        }
+    }
 
-// Add packaging options to handle native libraries
-packagingOptions {
-pickFirst '**/libc++_shared.so'
-pickFirst '**/libjnidispatch.so'
-}
+    buildFeatures {
+        viewBinding true
+    }
+    buildFeatures {
+        prefab true
+    }
+    buildFeatures {
+        buildConfig true
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
+            buildConfigField "boolean", "IS_BETA", "false"
+        }
+        debug {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
+            buildConfigField "boolean", "IS_BETA", "false"
+        }
+        beta {
+            initWith release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            resValue "string", "app_name", "Xelo client Beta"
+            buildConfigField "boolean", "IS_BETA", "true"
+            matchingFallbacks = ["release"]
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
+        }
+
+    }
+    packagingOptions {
+        jniLibs.useLegacyPackaging = true
+        doNotStrip "**/*.so"
+        resources.excludes += [
+                "DebugProbesKt.bin"
+        ]
+
+        resources.pickFirsts += [
+                "META-INF/INDEX.LIST",
+                "META-INF/DEPENDENCIES",
+                "META-INF/io.netty.versions.properties"
+        ]
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+        }
+    }
+
+    ndkVersion = "27.2.12479018"
 }
 
 dependencies {
-implementation libs.appcompat
-implementation libs.conscrypt.android
-implementation libs.constraintlayout
-implementation 'com.google.android.material:material:1.12.0'
-
-implementation 'org.java-websocket:Java-WebSocket:1.5.3'
-implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
-
-testImplementation libs.junit
-androidTestImplementation libs.ext.junit
-androidTestImplementation libs.espresso.core
+    implementation project(':minecraft')
+    implementation project(':minecraft-msftauth')
+    implementation libs.core.splashscreen
+    implementation libs.apk.parser
+    implementation libs.appcompat
+    implementation libs.conscrypt.android
+    implementation libs.constraintlayout
+    implementation libs.material
+    implementation libs.gson
+    implementation libs.androidx.preference.ktx
+    implementation libs.conscrypt.android
+    implementation libs.androidx.games.activity
+    implementation libs.okhttp
+    implementation libs.androidx.dynamicanimation
+    implementation libs.bedrock.connection
+    implementation libs.xcrash.android.lib
+    testImplementation libs.junit
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.espresso.core
 }
